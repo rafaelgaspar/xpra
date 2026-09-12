@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 
-PKG=xpra-rafaelgaspar
+PKG=xpra-rafaelgaspar-overlay
 PY_REL_PATHS="
 x11/wm.py
 x11/shadow/backends.py

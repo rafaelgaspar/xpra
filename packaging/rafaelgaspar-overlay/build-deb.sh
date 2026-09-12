@@ -1,20 +1,22 @@
 #!/usr/bin/env bash
-# Build xpra-rafaelgaspar: diverted overrides on top of xpra.org packages.
+# Build xpra-rafaelgaspar-overlay: diverted overrides on top of xpra.org packages.
 set -euo pipefail
 
-if [[ $# -lt 1 ]]; then
-  echo "usage: $0 <xpra-upstream-version> [html5-tarball] [html5-upstream-version]" >&2
+if [[ $# -lt 2 ]]; then
+  echo "usage: $0 <deb-version> <xpra-upstream-version> [html5-tarball] [html5-upstream-version]" >&2
   exit 1
 fi
 
-UPSTREAM_VERSION="${1#v}"
-HTML5_TARBALL="${2:-}"
-HTML5_UPSTREAM="${3:-}"
+DEB_VERSION="$1"
+UPSTREAM_VERSION="${2#v}"
+HTML5_TARBALL="${3:-}"
+HTML5_UPSTREAM="${4:-}"
 HTML5_UPSTREAM="${HTML5_UPSTREAM#v}"
+PKG_NAME=xpra-rafaelgaspar-overlay
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 OVERLAY_DIR="$(cd "$(dirname "$0")" && pwd)"
 STAGING="$(mktemp -d)"
-PKG_ROOT="${STAGING}/xpra-rafaelgaspar_${UPSTREAM_VERSION}_all"
+PKG_ROOT="${STAGING}/${PKG_NAME}_${DEB_VERSION}_all"
 DEBIAN="${PKG_ROOT}/DEBIAN"
 
 install -d -m 0755 "${DEBIAN}"
@@ -54,8 +56,8 @@ if [[ "${bundle_html5}" -eq 1 ]]; then
 fi
 
 {
-  echo "Package: xpra-rafaelgaspar"
-  echo "Version: ${UPSTREAM_VERSION}"
+  echo "Package: ${PKG_NAME}"
+  echo "Version: ${DEB_VERSION}"
   echo "Architecture: all"
   echo "Depends: xpra-server (>= ${UPSTREAM_VERSION}), xpra-x11 (>= ${UPSTREAM_VERSION}), xpra-common (>= ${UPSTREAM_VERSION})"
   echo "Replaces: ${replaces}"
@@ -72,7 +74,7 @@ install -m 0755 "${OVERLAY_DIR}/prerm" "${DEBIAN}/prerm"
 
 OUT_DIR="${REPO_ROOT}/dist"
 mkdir -p "${OUT_DIR}"
-dpkg-deb --build --root-owner-group "${PKG_ROOT}" "${OUT_DIR}/xpra-rafaelgaspar_${UPSTREAM_VERSION}_all.deb"
+dpkg-deb --build --root-owner-group "${PKG_ROOT}" "${OUT_DIR}/${PKG_NAME}_${DEB_VERSION}_all.deb"
 rm -rf "${STAGING}"
 
-echo "built ${OUT_DIR}/xpra-rafaelgaspar_${UPSTREAM_VERSION}_all.deb"
+echo "built ${OUT_DIR}/${PKG_NAME}_${DEB_VERSION}_all.deb"
