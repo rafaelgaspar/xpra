@@ -39,7 +39,7 @@ jobs:
         id: release
         run: |
           set -euo pipefail
-          base_tag=$(git tag -l 'v*.*.*' --merged HEAD | sort -V | tail -1)
+          base_tag=$(git tag -l 'v*.*.*' --merged HEAD | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)
           [[ -n "${base_tag}" ]] || { echo "No upstream semver tag found in history"; exit 1; }
           version="${base_tag#v}"
           prefix="${base_tag}-rafaelgaspar"
