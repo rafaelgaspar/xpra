@@ -42,8 +42,8 @@ jobs:
           base_tag=$(git tag -l 'v*.*.*' --merged HEAD | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)
           [[ -n "${base_tag}" ]] || { echo "No upstream semver tag found in history"; exit 1; }
           version="${base_tag#v}"
-          prefix="${base_tag}-rafaelgaspar"
           build=0
+          prefix="${base_tag}-rafaelgaspar.${build}"
           while git rev-parse "${prefix}" >/dev/null 2>&1; do
             existing=$(git rev-parse "${prefix}")
             if [[ "${existing}" == "${GITHUB_SHA}" ]]; then
@@ -70,7 +70,7 @@ jobs:
           path: xpra-html5-src
           fetch-depth: 0
 
-      - name: Build xpra-html5 tarball from source
+      - name: Download xpra-html5 release tarball for overlay deb
         id: html5
         run: |
           set -euo pipefail
@@ -83,22 +83,16 @@ jobs:
           git fetch --tags upstream
           base_tag=$(git tag -l 'v[0-9]*' --merged HEAD | grep -E '^v[0-9]+$' | sort -V | tail -1)
           [[ -n "${base_tag}" ]] || { echo "No upstream html5 base tag found"; exit 1; }
-          html5_version=$(git tag -l "${base_tag}-rafaelgaspar*" --points-at HEAD | sort -V | tail -1)
-          [[ -n "${html5_version}" ]] || { echo "No rafaelgaspar integration tag on xpra-html5 HEAD"; exit 1; }
-          html5_version="${html5_version#v}"
-          for f in Menu.js MenuCustom.js Client.js Window.js; do
-            node --check "html5/js/${f}"
-          done
-          staging="$(mktemp -d)"
-          mkdir -p "${staging}/xpra-html5-${html5_version}/html5"
-          cp -a html5/. "${staging}/xpra-html5-${html5_version}/html5/"
-          mkdir -p ../dist
+          html5_tag=$(git tag -l "${base_tag}-rafaelgaspar*" --points-at HEAD | sort -V | tail -1)
+          [[ -n "${html5_tag}" ]] || { echo "No rafaelgaspar integration tag on xpra-html5 HEAD; release xpra-html5 first"; exit 1; }
+          html5_version="${html5_tag#v}"
           asset="xpra-html5-${html5_version}.tar.gz"
-          tar -czf "../dist/${asset}" -C "${staging}" "xpra-html5-${html5_version}"
-          rm -rf "${staging}"
+          mkdir -p ../dist
+          curl -fsSL -o "../dist/${asset}" \
+            "https://github.com/rafaelgaspar/xpra-html5/releases/download/${html5_tag}/${asset}"
           echo "base_tag=${base_tag}" >> "$GITHUB_OUTPUT"
+          echo "html5_tag=${html5_tag}" >> "$GITHUB_OUTPUT"
           echo "html5_version=${html5_version}" >> "$GITHUB_OUTPUT"
-          echo "asset=${asset}" >> "$GITHUB_OUTPUT"
           echo "tarball=dist/${asset}" >> "$GITHUB_OUTPUT"
 
       - name: Build overlay deb
@@ -124,13 +118,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.release.outputs.tag }}
           DEB: dist/xpra-rafaelgaspar-overlay_${{ steps.release.outputs.deb_version }}_all.deb
-          HTML5: dist/${{ steps.html5.outputs.asset }}
         run: |
           body=$(cat <<EOF
           rafaelgaspar integration release based on upstream ${{ steps.release.outputs.base_tag }}.
 
-          - \`xpra-rafaelgaspar-overlay\` Debian package (dpkg-divert + version-pinned replaces; Python patches + fork HTML5 www tree)
-          - Bundled HTML5 client built from rafaelgaspar/xpra-html5 @ ${{ steps.html5.outputs.base_tag }}
+          - \`xpra-rafaelgaspar-overlay\` Debian package (dpkg-divert; Python patches + HTML5 www tree from rafaelgaspar/xpra-html5 @ ${{ steps.html5.outputs.html5_tag }})
+          - HTML5 client tarball is published only on [rafaelgaspar/xpra-html5](https://github.com/rafaelgaspar/xpra-html5/releases/tag/${{ steps.html5.outputs.html5_tag }})
           EOF
           )
           gh release create "${TAG}" \
@@ -138,5 +131,4 @@ jobs:
             --title "${TAG}" \
             --notes "${body}" \
             --target rafaelgaspar \
-            "${DEB}" \
-            "${HTML5}"
+            "${DEB}"

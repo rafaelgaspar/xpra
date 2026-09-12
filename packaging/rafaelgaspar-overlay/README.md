@@ -23,8 +23,12 @@ instead of overwriting the forked paths.
 
 Package **name** is `xpra-rafaelgaspar-overlay`. **Version** matches the integration
 release tag without `v` (e.g. `6.5.3-rafaelgaspar.9` for `v6.5.3-rafaelgaspar.9`;
-`6.5.3-rafaelgaspar` for the first build on that upstream base).
+`6.5.3-rafaelgaspar.0` for the first build on that upstream base).
 `Depends`/`Breaks` floors still use the upstream xpra semver (`6.5.3`).
+
+HTML5 for the overlay deb is taken from the matching
+[rafaelgaspar/xpra-html5](https://github.com/rafaelgaspar/xpra-html5) integration
+release (not rebuilt or re-published on xpra releases).
 
 Rebuild and reinstall this package whenever the xpra.org base version changes.
 
