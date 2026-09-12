@@ -38,29 +38,12 @@ jobs:
       - name: Resolve integration tag
         id: release
         run: |
-          set -euo pipefail
-          base_tag=$(git tag -l 'v*.*.*' --merged HEAD | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)
-          [[ -n "${base_tag}" ]] || { echo "No upstream semver tag found in history"; exit 1; }
-          version="${base_tag#v}"
-          build=0
-          prefix="${base_tag}-rafaelgaspar.${build}"
-          while git rev-parse "${prefix}" >/dev/null 2>&1; do
-            existing=$(git rev-parse "${prefix}")
-            if [[ "${existing}" == "${GITHUB_SHA}" ]]; then
-              echo "tag=${prefix}" >> "$GITHUB_OUTPUT"
-              echo "deb_version=${prefix#v}" >> "$GITHUB_OUTPUT"
-              echo "xpra_upstream_version=${version}" >> "$GITHUB_OUTPUT"
-              echo "skip_release=true" >> "$GITHUB_OUTPUT"
-              exit 0
-            fi
-            build=$((build + 1))
-            prefix="${base_tag}-rafaelgaspar.${build}"
-          done
-          echo "tag=${prefix}" >> "$GITHUB_OUTPUT"
-          echo "deb_version=${prefix#v}" >> "$GITHUB_OUTPUT"
-          echo "xpra_upstream_version=${version}" >> "$GITHUB_OUTPUT"
-          echo "base_tag=${base_tag}" >> "$GITHUB_OUTPUT"
-          echo "skip_release=false" >> "$GITHUB_OUTPUT"
+          chmod +x ./.github/scripts/resolve-integration-tag.sh
+          ./.github/scripts/resolve-integration-tag.sh 'v*.*.*' '^v[0-9]+\.[0-9]+\.[0-9]+$'
+          integration_version=$(grep '^integration_version=' "$GITHUB_OUTPUT" | tail -1 | cut -d= -f2-)
+          base_tag=$(grep '^base_tag=' "$GITHUB_OUTPUT" | tail -1 | cut -d= -f2-)
+          echo "deb_version=${integration_version}" >> "$GITHUB_OUTPUT"
+          echo "xpra_upstream_version=${base_tag#v}" >> "$GITHUB_OUTPUT"
 
       - name: Checkout xpra-html5 fork
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

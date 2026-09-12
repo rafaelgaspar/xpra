@@ -12,7 +12,7 @@ disable-model-invocation: true
 
 Upstream: [Xpra-org/xpra](https://github.com/Xpra-org/xpra). Fork:
 [rafaelgaspar/xpra](https://github.com/rafaelgaspar/xpra). Ships
-**integration tags** from branch **`rafaelgaspar`** (format `vX.Y.Z-rafaelgaspar`).
+**integration tags** from branch **`rafaelgaspar`** (format `vX.Y.Z-rafaelgaspar.N`, starting at `.0`).
 
 This skill covers **this repository only** — branch workflow, CI, and integration replay.
 k3s-home desktop-base consumes forked Python sources as an overlay on top of xpra.org
