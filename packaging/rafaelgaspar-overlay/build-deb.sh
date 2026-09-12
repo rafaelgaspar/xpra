@@ -1,19 +1,23 @@
 #!/usr/bin/env bash
-# Build xpra-rafaelgaspar: Python overlays on top of xpra.org xpra-server.
+# Build xpra-rafaelgaspar: diverted overrides on top of xpra.org packages.
 set -euo pipefail
 
 if [[ $# -lt 1 ]]; then
-  echo "usage: $0 <deb-version> [html5-tarball]" >&2
+  echo "usage: $0 <xpra-upstream-version> [html5-tarball] [html5-upstream-version]" >&2
   exit 1
 fi
 
-DEB_VERSION="$1"
+UPSTREAM_VERSION="${1#v}"
 HTML5_TARBALL="${2:-}"
+HTML5_UPSTREAM="${3:-}"
+HTML5_UPSTREAM="${HTML5_UPSTREAM#v}"
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+OVERLAY_DIR="$(cd "$(dirname "$0")" && pwd)"
 STAGING="$(mktemp -d)"
-PKG_ROOT="${STAGING}/xpra-rafaelgaspar_${DEB_VERSION}_all"
+PKG_ROOT="${STAGING}/xpra-rafaelgaspar_${UPSTREAM_VERSION}_all"
+DEBIAN="${PKG_ROOT}/DEBIAN"
 
-install -d -m 0755 "${PKG_ROOT}/DEBIAN"
+install -d -m 0755 "${DEBIAN}"
 install -d -m 0755 \
   "${PKG_ROOT}/usr/lib/python3/dist-packages/xpra/x11" \
   "${PKG_ROOT}/usr/lib/python3/dist-packages/xpra/x11/shadow" \
@@ -29,30 +33,46 @@ install -m 0644 "${REPO_ROOT}/xpra/platform/posix/shadow_server.py" \
 install -m 0644 "${REPO_ROOT}/xpra/x11/server/xtest_pointer.py" \
   "${PKG_ROOT}/usr/lib/python3/dist-packages/xpra/x11/server/xtest_pointer.py"
 
-depends="xpra-server"
+bundle_html5=0
 if [[ -n "${HTML5_TARBALL}" ]]; then
+  bundle_html5=1
   install -d -m 0755 "${PKG_ROOT}/usr/share/xpra/www"
   html5_staging="$(mktemp -d)"
   tar -xzf "${HTML5_TARBALL}" -C "${html5_staging}"
   html5_root="$(find "${html5_staging}" -mindepth 1 -maxdepth 1 -type d | head -1)"
   cp -a "${html5_root}/html5/." "${PKG_ROOT}/usr/share/xpra/www/"
   rm -rf "${html5_staging}"
-  depends="${depends}, xpra-html5"
 fi
 
-cat > "${PKG_ROOT}/DEBIAN/control" <<EOF
-Package: xpra-rafaelgaspar
-Version: ${DEB_VERSION}
-Architecture: all
-Depends: ${depends}
-Maintainer: Rafael Antunes <me@rafaelgaspar.xyz>
-Description: rafaelgaspar overlay patches for Xpra server
- Replaces selected pure-Python modules from xpra-server after install from xpra.org.
-EOF
+replaces="xpra-x11, xpra-common"
+breaks="xpra-server (<< ${UPSTREAM_VERSION}), xpra-x11 (<< ${UPSTREAM_VERSION}), xpra-common (<< ${UPSTREAM_VERSION})"
+if [[ "${bundle_html5}" -eq 1 ]]; then
+  replaces="${replaces}, xpra-html5"
+  if [[ -n "${HTML5_UPSTREAM}" ]]; then
+    breaks="${breaks}, xpra-html5 (<< ${HTML5_UPSTREAM})"
+  fi
+fi
+
+{
+  echo "Package: xpra-rafaelgaspar"
+  echo "Version: ${UPSTREAM_VERSION}"
+  echo "Architecture: all"
+  echo "Depends: xpra-server (>= ${UPSTREAM_VERSION}), xpra-x11 (>= ${UPSTREAM_VERSION}), xpra-common (>= ${UPSTREAM_VERSION})"
+  echo "Replaces: ${replaces}"
+  echo "Breaks: ${breaks}"
+  echo "Maintainer: Rafael Antunes <me@rafaelgaspar.xyz>"
+  echo "Description: rafaelgaspar overlay patches for Xpra"
+  echo " Replaces selected modules from xpra-x11, xpra-common and optionally the HTML5"
+  echo " client tree. Uses dpkg-divert so xpra.org package upgrades do not overwrite"
+  echo " the forked files until this package is rebuilt for a new upstream version."
+} > "${DEBIAN}/control"
+
+install -m 0755 "${OVERLAY_DIR}/preinst" "${DEBIAN}/preinst"
+install -m 0755 "${OVERLAY_DIR}/prerm" "${DEBIAN}/prerm"
 
 OUT_DIR="${REPO_ROOT}/dist"
 mkdir -p "${OUT_DIR}"
-dpkg-deb --build --root-owner-group "${PKG_ROOT}" "${OUT_DIR}/xpra-rafaelgaspar_${DEB_VERSION}_all.deb"
+dpkg-deb --build --root-owner-group "${PKG_ROOT}" "${OUT_DIR}/xpra-rafaelgaspar_${UPSTREAM_VERSION}_all.deb"
 rm -rf "${STAGING}"
 
-echo "built ${OUT_DIR}/xpra-rafaelgaspar_${DEB_VERSION}_all.deb"
+echo "built ${OUT_DIR}/xpra-rafaelgaspar_${UPSTREAM_VERSION}_all.deb"

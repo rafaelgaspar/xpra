@@ -1,0 +1,42 @@
+#!/bin/sh
+set -e
+
+PKG=xpra-rafaelgaspar
+PY_REL_PATHS="
+x11/wm.py
+x11/shadow/backends.py
+x11/server/xtest_pointer.py
+platform/posix/shadow_server.py
+"
+
+find_xpra_py() {
+  for d in /usr/lib/python3*/dist-packages/xpra; do
+    if [ -d "$d" ]; then
+      echo "$d"
+      return 0
+    fi
+  done
+  return 1
+}
+
+undiver_path() {
+  target="$1"
+  divert="${target}.distrib"
+  if dpkg-divert --listpackage "$target" 2>/dev/null | grep -qx "$PKG"; then
+    dpkg-divert --package "$PKG" --remove --rename --divert "$divert" "$target"
+  fi
+}
+
+case "$1" in
+  remove|deconfigure)
+    PY="$(find_xpra_py || true)"
+    if [ -n "${PY:-}" ]; then
+      for rel in $PY_REL_PATHS; do
+        undiver_path "${PY}/${rel}"
+      done
+    fi
+    undiver_path /usr/share/xpra/www
+    ;;
+esac
+
+exit 0
