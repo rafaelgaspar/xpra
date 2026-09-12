@@ -48,7 +48,7 @@ jobs:
             existing=$(git rev-parse "${prefix}")
             if [[ "${existing}" == "${GITHUB_SHA}" ]]; then
               echo "tag=${prefix}" >> "$GITHUB_OUTPUT"
-              echo "deb_version=${version}.${build}" >> "$GITHUB_OUTPUT"
+              echo "deb_version=${prefix#v}" >> "$GITHUB_OUTPUT"
               echo "xpra_upstream_version=${version}" >> "$GITHUB_OUTPUT"
               echo "skip_release=true" >> "$GITHUB_OUTPUT"
               exit 0
@@ -57,7 +57,7 @@ jobs:
             prefix="${base_tag}-rafaelgaspar.${build}"
           done
           echo "tag=${prefix}" >> "$GITHUB_OUTPUT"
-          echo "deb_version=${version}.${build}" >> "$GITHUB_OUTPUT"
+          echo "deb_version=${prefix#v}" >> "$GITHUB_OUTPUT"
           echo "xpra_upstream_version=${version}" >> "$GITHUB_OUTPUT"
           echo "base_tag=${base_tag}" >> "$GITHUB_OUTPUT"
           echo "skip_release=false" >> "$GITHUB_OUTPUT"

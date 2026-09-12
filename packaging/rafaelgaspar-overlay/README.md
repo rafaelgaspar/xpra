@@ -21,8 +21,9 @@ instead of overwriting the forked paths.
 - `Breaks` below the built-for upstream floor (`<< <upstream>`)
 - `Replaces` (including `xpra-html5` when bundling HTML5) for file ownership
 
-Package **name** is `xpra-rafaelgaspar-overlay`. **Version** is `<upstream>.<build>` (e.g.
-`6.5.3.8` for git tag `v6.5.3-rafaelgaspar.8`; `6.5.3.0` for `v6.5.3-rafaelgaspar`).
+Package **name** is `xpra-rafaelgaspar-overlay`. **Version** matches the integration
+release tag without `v` (e.g. `6.5.3-rafaelgaspar.9` for `v6.5.3-rafaelgaspar.9`;
+`6.5.3-rafaelgaspar` for the first build on that upstream base).
 `Depends`/`Breaks` floors still use the upstream xpra semver (`6.5.3`).
 
 Rebuild and reinstall this package whenever the xpra.org base version changes.
@@ -31,7 +32,7 @@ Rebuild and reinstall this package whenever the xpra.org base version changes.
 
 ```sh
 ./packaging/rafaelgaspar-overlay/build-deb.sh \
-  6.5.3.8 \
+  6.5.3-rafaelgaspar.9 \
   6.5.3 \
   dist/xpra-html5-20-rafaelgaspar.14.tar.gz \
   20
