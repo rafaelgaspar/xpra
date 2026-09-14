@@ -67,6 +67,9 @@ class ServerBase(ServerBaseClass):
             "exit": self._handle_hello_request_exit,
             "stop": self._handle_hello_request_stop,
         })
+        from xpra.server.subsystem.desktop_server_events import start as start_desktop_server_events
+
+        start_desktop_server_events()
         self._server_sources: dict = {}
         self.ui_driver = None
         self.client_shutdown: bool = CLIENT_CAN_SHUTDOWN
@@ -266,6 +269,9 @@ class ServerBase(ServerBaseClass):
             self.add_new_client(ss, c)
             self.send_initial_data(ss)
             self.client_startup_complete(ss)
+            from xpra.server.subsystem.desktop_server_events import on_client_connected
+
+            on_client_connected(self)
 
             if self._closing:
                 closing()
@@ -483,6 +489,9 @@ class ServerBase(ServerBaseClass):
         source.close()
         netlog("cleanup_source(%s) remaining sources: %s", source, remaining_sources)
         netlog.info("%s client %i disconnected.", ptype, source.counter)
+        from xpra.server.subsystem.desktop_server_events import on_client_disconnected
+
+        on_client_disconnected(self)
         has_client = len(remaining_sources) > 0
         if not has_client:
             GLib.idle_add(self.last_client_exited)
