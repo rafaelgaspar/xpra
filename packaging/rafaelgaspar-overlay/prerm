@@ -5,6 +5,7 @@ PKG=xpra-rafaelgaspar-overlay
 PY_REL_PATHS="
 x11/wm.py
 x11/shadow/backends.py
+x11/shadow/server.py
 x11/server/xtest_pointer.py
 platform/posix/shadow_server.py
 "

@@ -30,6 +30,8 @@ install -m 0644 "${REPO_ROOT}/xpra/x11/wm.py" \
   "${PKG_ROOT}/usr/lib/python3/dist-packages/xpra/x11/wm.py"
 install -m 0644 "${REPO_ROOT}/xpra/x11/shadow/backends.py" \
   "${PKG_ROOT}/usr/lib/python3/dist-packages/xpra/x11/shadow/backends.py"
+install -m 0644 "${REPO_ROOT}/xpra/x11/shadow/server.py" \
+  "${PKG_ROOT}/usr/lib/python3/dist-packages/xpra/x11/shadow/server.py"
 install -m 0644 "${REPO_ROOT}/xpra/platform/posix/shadow_server.py" \
   "${PKG_ROOT}/usr/lib/python3/dist-packages/xpra/platform/posix/shadow_server.py"
 install -m 0644 "${REPO_ROOT}/xpra/x11/server/xtest_pointer.py" \
