@@ -4,6 +4,17 @@
 4. [Documentation](#documentation)
 5. [Help](#help)
 
+## rafaelgaspar fork
+
+This repository is a [GPLv2+](COPYING) fork of [Xpra-org/xpra](https://github.com/Xpra-org/xpra).
+Customizations ship as **integration tags** built from the **`rafaelgaspar`** branch
+(format `vX.Y.Z-rafaelgaspar`):
+
+- **Releases:** [rafaelgaspar/xpra releases](https://github.com/rafaelgaspar/xpra/releases)
+- **Workflow:** linear stacked `feat/*` branches (see [`.cursor/skills/rafaelgaspar-fork/SKILL.md`](.cursor/skills/rafaelgaspar-fork/SKILL.md))
+
+For upstream Xpra docs and community support, see [xpra.org](https://xpra.org/).
+
 # About
 Xpra is known as _"screen for X"_ : its [seamless mode](docs/Usage/Seamless.md) allows you to run X11 programs,
 usually on a remote host, direct their display to your local machine,

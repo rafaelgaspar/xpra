@@ -68,7 +68,7 @@ rpmbuild -ba packaging/rpm/<spec>                          # for native libs (na
 
 Run from the repo root. If the build succeeds, the resulting `.rpm` lands in `~/rpmbuild/RPMS/<arch>/`. Keep going.
 
-If it fails, debug — the failure usually means the upstream changed something the spec wasn't ready for. See "Common breakage patterns" below. Fix the spec, re-run rpmbuild, repeat until it passes.
+If it fails, debug — the failure usually means the upstream changed something the spec wasn't ready for. Fix the spec, re-run rpmbuild, repeat until it passes.
 
 ### 6. Commit
 

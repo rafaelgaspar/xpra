@@ -1,0 +1,117 @@
+name: rafaelgaspar Release
+
+on:
+  push:
+    branches:
+      - rafaelgaspar
+
+permissions: {}
+
+jobs:
+  release:
+    name: Tag, build deb, publish release
+    if: github.repository == 'rafaelgaspar/xpra'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Configure git
+        run: |
+          git config user.name "Rafael Antunes"
+          git config user.email "me@rafaelgaspar.xyz"
+
+      - name: Fetch upstream tags
+        run: |
+          if git remote get-url upstream >/dev/null 2>&1; then
+            git remote set-url upstream https://github.com/Xpra-org/xpra.git
+          else
+            git remote add upstream https://github.com/Xpra-org/xpra.git
+          fi
+          git fetch --tags upstream
+
+      - name: Resolve integration tag
+        id: release
+        run: |
+          chmod +x ./.github/scripts/resolve-integration-tag.sh
+          ./.github/scripts/resolve-integration-tag.sh 'v*.*.*' '^v[0-9]+\.[0-9]+\.[0-9]+$'
+          integration_version=$(grep '^integration_version=' "$GITHUB_OUTPUT" | tail -1 | cut -d= -f2-)
+          base_tag=$(grep '^base_tag=' "$GITHUB_OUTPUT" | tail -1 | cut -d= -f2-)
+          echo "deb_version=${integration_version}" >> "$GITHUB_OUTPUT"
+          echo "xpra_upstream_version=${base_tag#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout xpra-html5 fork
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: rafaelgaspar/xpra-html5
+          ref: rafaelgaspar
+          path: xpra-html5-src
+          fetch-depth: 0
+
+      - name: Download xpra-html5 release tarball for overlay deb
+        id: html5
+        run: |
+          set -euo pipefail
+          cd xpra-html5-src
+          if git remote get-url upstream >/dev/null 2>&1; then
+            git remote set-url upstream https://github.com/Xpra-org/xpra-html5.git
+          else
+            git remote add upstream https://github.com/Xpra-org/xpra-html5.git
+          fi
+          git fetch --tags upstream
+          base_tag=$(git tag -l 'v[0-9]*' --merged HEAD | grep -E '^v[0-9]+$' | sort -V | tail -1)
+          [[ -n "${base_tag}" ]] || { echo "No upstream html5 base tag found"; exit 1; }
+          html5_tag=$(git tag -l "${base_tag}-rafaelgaspar*" --points-at HEAD | sort -V | tail -1)
+          [[ -n "${html5_tag}" ]] || { echo "No rafaelgaspar integration tag on xpra-html5 HEAD; release xpra-html5 first"; exit 1; }
+          html5_version="${html5_tag#v}"
+          asset="xpra-html5-${html5_version}.tar.gz"
+          mkdir -p ../dist
+          curl -fsSL -o "../dist/${asset}" \
+            "https://github.com/rafaelgaspar/xpra-html5/releases/download/${html5_tag}/${asset}"
+          echo "base_tag=${base_tag}" >> "$GITHUB_OUTPUT"
+          echo "html5_tag=${html5_tag}" >> "$GITHUB_OUTPUT"
+          echo "html5_version=${html5_version}" >> "$GITHUB_OUTPUT"
+          echo "tarball=dist/${asset}" >> "$GITHUB_OUTPUT"
+
+      - name: Build overlay deb
+        run: |
+          chmod +x ./packaging/rafaelgaspar-overlay/build-deb.sh
+          ./packaging/rafaelgaspar-overlay/build-deb.sh \
+            "${{ steps.release.outputs.deb_version }}" \
+            "${{ steps.release.outputs.xpra_upstream_version }}" \
+            "${{ steps.html5.outputs.tarball }}" \
+            "${{ steps.html5.outputs.base_tag }}"
+
+      - name: Create and push integration tag
+        if: steps.release.outputs.skip_release != 'true'
+        env:
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          git tag -a "${TAG}" -m "rafaelgaspar integration release ${TAG}"
+          git push origin "${TAG}"
+
+      - name: Create GitHub release
+        if: steps.release.outputs.skip_release != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.release.outputs.tag }}
+          DEB: dist/xpra-rafaelgaspar-overlay_${{ steps.release.outputs.deb_version }}_all.deb
+        run: |
+          body=$(cat <<EOF
+          rafaelgaspar integration release based on upstream ${{ steps.release.outputs.base_tag }}.
+
+          - \`xpra-rafaelgaspar-overlay\` Debian package (dpkg-divert; Python patches + HTML5 www tree from rafaelgaspar/xpra-html5 @ ${{ steps.html5.outputs.html5_tag }})
+          - HTML5 client tarball is published only on [rafaelgaspar/xpra-html5](https://github.com/rafaelgaspar/xpra-html5/releases/tag/${{ steps.html5.outputs.html5_tag }})
+          EOF
+          )
+          gh release create "${TAG}" \
+            --repo rafaelgaspar/xpra \
+            --title "${TAG}" \
+            --notes "${body}" \
+            --target rafaelgaspar \
+            "${DEB}"
