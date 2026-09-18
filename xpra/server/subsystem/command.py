@@ -15,10 +15,11 @@ from collections.abc import Callable, Sequence
 
 from xpra.util.child_reaper import get_child_reaper, ProcInfo
 from xpra.common import noop
-from xpra.os_util import OSX, WIN32, gi_import
+from xpra.os_util import OSX, WIN32, POSIX, gi_import
 from xpra.util.objects import typedict
 from xpra.util.str_fn import csv
 from xpra.util.env import envint, restore_script_env, source_env
+from xpra.util.io import get_proc_cmdline
 from xpra.net.common import Packet
 from xpra.util.system import stop_proc
 from xpra.util.thread import start_thread
@@ -168,6 +169,7 @@ class ChildCommandServer(StubServerMixin):
         self.start_late_commands: Sequence[str] = []
         self.start_child_commands: Sequence[str] = []
         self.start_child_late_commands: Sequence[str] = []
+        self.adopt_children: Sequence[str] = []
         self.start_after_connect: Sequence[str] = []
         self.start_after_connect_done = False
         self.start_child_after_connect: Sequence[str] = []
@@ -203,6 +205,7 @@ class ChildCommandServer(StubServerMixin):
         self.start_late_commands = opts.start_late
         self.start_child_commands = opts.start_child
         self.start_child_late_commands = opts.start_child_late
+        self.adopt_children = opts.adopt_children
         self.start_after_connect = opts.start_after_connect
         self.start_child_after_connect = opts.start_child_after_connect
         self.start_on_connect = opts.start_on_connect
@@ -227,12 +230,15 @@ class ChildCommandServer(StubServerMixin):
         self.args_control("start-child","executes the command arguments in the server context, "
                                         "as a 'child' (honouring exit-with-children)", min_args=1)
         self.args_control("start-env", "modify the environment used to start new commands", min_args=1)
+        self.args_control("adopt-children", "adopt the windows of an already-running process, by pid",
+                          min_args=1)
 
     def exec_on_last_client_exit(self, *args) -> None:
         log("exec_on_last_client_exit%s", args)
         self._exec_commands(self.start_on_last_client_exit, self.start_child_on_last_client_exit)
 
     def threaded_command_setup(self) -> None:
+        self.exec_adopt_children()
         self.exec_start_commands()
 
         def set_reaper_callback() -> None:
@@ -270,6 +276,7 @@ class ChildCommandServer(StubServerMixin):
             "start": self.start_commands,
             "start-late": self.start_late_commands,
             "start-child": self.start_child_commands,
+            "adopt-children": self.adopt_children,
             "start-child-late": self.start_child_late_commands,
             "start-after-connect": self.start_after_connect,
             "start-child-after-connect": self.start_child_after_connect,
@@ -312,6 +319,38 @@ class ChildCommandServer(StubServerMixin):
     def exec_start_commands(self) -> None:
         log("exec_start_commands() start=%s, start_child=%s", self.start_commands, self.start_child_commands)
         self._exec_commands(self.start_commands, self.start_child_commands)
+
+    def exec_adopt_children(self) -> None:
+        log("exec_adopt_children() adopt_children=%s", self.adopt_children)
+        for pid_str in self.adopt_children:
+            if pid_str:
+                self.adopt_child(pid_str)
+
+    def adopt_child(self, pid_str: str) -> ProcInfo | None:
+        # register an already-running process as if it were a --start-child
+        # of this session: its windows get managed the same way a freshly
+        # spawned child's would (the window manager adopts any window it
+        # finds mapped on the display, whoever created it), and its lifecycle
+        # is tracked by the child reaper so that --exit-with-children and
+        # friends apply to it too.
+        try:
+            pid = int(pid_str)
+        except ValueError:
+            log.error(f"Error: invalid pid to adopt: {pid_str!r}")
+            return None
+        if pid <= 0:
+            log.error(f"Error: invalid pid to adopt: {pid}")
+            return None
+        if POSIX and os.path.exists("/proc") and not os.path.exists(f"/proc/{pid}"):
+            log.warn(f"Warning: cannot adopt pid {pid}, no such process")
+            return None
+        cmdline = get_proc_cmdline(pid)
+        name = os.path.basename(cmdline[0]) if cmdline else f"pid-{pid}"
+        procinfo = get_child_reaper().add_pid(pid, name, cmdline or (name,), ignore=False)
+        self.children_count += 1
+        self.children_started.append(procinfo)
+        log.info(f"adopted existing process `{name}` with pid {pid}")
+        return procinfo
 
     def exec_after_connect_commands(self) -> None:
         log("exec_after_connect_commands() start=%s, start_child=%s",
@@ -528,6 +567,17 @@ class ChildCommandServer(StubServerMixin):
 
     def control_command_start_child(self, *args) -> str:
         return self.do_control_command_start(False, *args)
+
+    def control_command_adopt_children(self, *args) -> str:
+        adopted = []
+        for pid_str in args:
+            procinfo = self.adopt_child(pid_str)
+            if procinfo:
+                adopted.append(procinfo.pid)
+        if not adopted:
+            from xpra.net.control.common import ControlError
+            raise ControlError("failed to adopt any of the pids specified: %s" % csv(args))
+        return "adopted pid(s): %s" % csv(adopted)
 
     def do_control_command_start(self, ignore: bool, *args) -> str:
         from xpra.net.control.common import ControlError

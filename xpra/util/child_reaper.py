@@ -97,8 +97,8 @@ class ChildReaper:
         self._quit = quit_cb
         self._proc_info = []
         USE_PROCESS_POLLING = not POSIX or envbool("XPRA_USE_PROCESS_POLLING")
+        POLL_DELAY = envint("XPRA_POLL_DELAY", 2)
         if USE_PROCESS_POLLING:
-            POLL_DELAY = envint("XPRA_POLL_DELAY", 2)
             log("using process polling every %s seconds", POLL_DELAY)
             GLib.timeout_add(POLL_DELAY * 1000, self.check)
         else:
@@ -113,6 +113,12 @@ class ChildReaper:
                 return False  # Only call once
 
             GLib.timeout_add(0, check_once)
+            # SIGCHLD only fires for our own children: a process registered via
+            # add_pid() (ie: adopted, not forked by us) is never reaped by
+            # waitpid(), so its exit would otherwise go unnoticed until
+            # something else happens to call check(). Poll for those too,
+            # at the same cadence as the USE_PROCESS_POLLING path:
+            GLib.timeout_add(POLL_DELAY * 1000, self.poll)
 
     def cleanup(self) -> None:
         self.reap()
