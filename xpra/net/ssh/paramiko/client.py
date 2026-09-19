@@ -10,9 +10,7 @@ from time import sleep, monotonic
 from typing import Any, NoReturn
 from collections.abc import Sequence
 
-from xpra.net.ssh.paramiko.util import (
-    keymd5, get_key_fingerprints, get_sha256_fingerprint_for_key, load_private_key, SSHSocketConnection,
-)
+from xpra.net.ssh.paramiko.util import keymd5, get_key_fingerprints, load_private_key, SSHSocketConnection
 from xpra.scripts.main import InitException, InitExit
 from xpra.scripts.args import shellquote
 from xpra.net.connect import host_target_string
@@ -505,11 +503,9 @@ def load_host_keys() -> tuple[str, Any]:   # returns a HostKeys object
 
 
 def lookup_host_keys(host_keys, host: str) -> dict:
-    # `HostKeys.lookup` returns `None` if the host is not found,
-    # and a `SubDict` - which is a `Mapping` but not a `dict` - if it is found,
-    # so convert it to a real `dict`:
+    # `HostKeys.lookup` returns `None` if the host is not found:
     try:
-        return dict(host_keys.lookup(host) or {})
+        return host_keys.lookup(host) or {}
     except Exception:
         log("%s.lookup(%s)", host_keys, host, exc_info=True)
         return {}
@@ -760,25 +756,17 @@ class AuthenticationManager:
         all_agent_keys = agent.get_keys()
         log("agent keys: %s", all_agent_keys)
         log("allowed key fingerprints: %s", allowed_key_fingerprints)
-        # index the agent keys by fingerprint, preserving the order used by the agent:
-        agent_fingerprints: dict[str, Any] = {}
-        for agent_key in all_agent_keys:
-            fingerprint = get_sha256_fingerprint_for_key(agent_key)
-            if fingerprint and fingerprint not in agent_fingerprints:
-                agent_fingerprints[fingerprint] = agent_key
-        # just like openssh's `pubkey_prepare`,
-        # the keys matching our keyfiles are tried first, in the order the keyfiles are configured:
-        agent_keys = []
-        for fingerprint in allowed_key_fingerprints:
-            # `pop` so that each key is only tried once,
-            # and so that `agent_fingerprints` is left with the keys we have no keyfile for:
-            agent_key = agent_fingerprints.pop(fingerprint, None)
-            if agent_key is not None:
-                agent_keys.append(agent_key)
+        agent_keys = [x for x in all_agent_keys if x.get_fingerprint() in allowed_key_fingerprints]
         log("agent keys matching fingerprints: %s", agent_keys)
         if not self.configbool("identitiesonly", False):
-            # then the remaining agent keys, in the order used by the agent:
-            agent_keys += list(agent_fingerprints.values())
+            for agent_key in all_agent_keys:
+                try:
+                    if agent_key not in agent_keys:
+                        agent_keys.append(agent_key)
+                except NotImplementedError:
+                    log("auth_agent()", exc_info=True)
+                    log.warn("Warning: failed to compare agent keys")
+                    agent_keys.append(agent_key)
         if not agent_keys:
             log.info("no ssh agent keys found")
             return

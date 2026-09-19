@@ -149,15 +149,11 @@ def do_get_user_conf_dirs(uid) -> list[str]:
     return dirs
 
 
-def get_runtime_dir(uid: int = -1) -> str:
+def get_runtime_dir() -> str:
     runtime_dir = os.environ.get("XDG_RUNTIME_DIR", "")
     if runtime_dir:
         return runtime_dir
     if sys.platform.startswith("linux"):
-        if uid < 0:
-            uid = os.geteuid()
-        if uid == 0:
-            return ""
         for d in ("/run/user", "/var/run/user"):
             if os.path.exists(d) and os.path.isdir(d):
                 runtime_dir = d + "/$UID"

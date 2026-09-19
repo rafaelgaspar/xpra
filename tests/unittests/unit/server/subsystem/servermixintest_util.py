@@ -32,15 +32,12 @@ class ServerMixinTest(unittest.TestCase):
 
     def tearDown(self):
         unittest.TestCase.tearDown(self)
-        self.cleanup_test_objects()
-
-    def cleanup_test_objects(self) -> None:
-        if source := self.source:
+        if self.source:
+            self.source.cleanup()
             self.source = None
-            source.cleanup()
-        if mixin := self.mixin:
+        if self.mixin:
+            self.mixin.cleanup()
             self.mixin = None
-            mixin.cleanup()
 
     def debug_all(self) -> None:
         from xpra.log import enable_debug_for

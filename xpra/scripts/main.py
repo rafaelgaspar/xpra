@@ -91,6 +91,7 @@ WAIT_SERVER_TIMEOUT: int = envint("WAIT_SERVER_TIMEOUT", 90)
 OPENGL_PROBE_TIMEOUT: int = envint("XPRA_OPENGL_PROBE_TIMEOUT", 5)
 SYSTEMD_RUN: bool = envbool("XPRA_SYSTEMD_RUN", True)
 VERIFY_SOCKET_TIMEOUT: int = envint("XPRA_VERIFY_SOCKET_TIMEOUT", 1)
+LIST_REPROBE_TIMEOUT: int = envint("XPRA_LIST_REPROBE_TIMEOUT", 10)
 SPLASH_EXIT_DELAY: int = envint("XPRA_SPLASH_EXIT_DELAY", 4)
 
 NO_NETWORK_SUBCOMMANDS = (
@@ -1281,11 +1282,6 @@ def get_client_app(cmdline: list[str], error_cb: Callable, opts, extra_args: lis
         app = ConnectTestXpraClient(opts)
     elif mode == "record":
         from xpra.client.base.features import set_client_features
-        # the recorder has nowhere to save a file, and cannot print or open a URL:
-        # turning these off before the features are evaluated keeps the `file` and
-        # `printer` subsystems out of the client, and out of its `hello` packet,
-        # so that the server never sends it packets it has no handlers for
-        opts.file_transfer = opts.printing = opts.open_files = opts.open_url = "no"
         set_client_features(opts)
         basic()
         from xpra.client.base.record import RecordClient
@@ -1401,8 +1397,8 @@ def get_client_gui_app(error_cb: Callable, opts, request_mode: str, extra_args: 
         raise InitException(msg) from None
     may_show_progress(app, 30, "client configuration")
     try:
-        opts.encoding = normalize_client_encoding_option(opts.encoding)
         app.init(opts)
+        opts.encoding = handle_client_encoding_option(app, opts.encoding)
 
         def handshake_complete(*_args) -> None:
             may_show_progress(app, 100, "connection established")
@@ -1422,7 +1418,6 @@ def get_client_gui_app(error_cb: Callable, opts, request_mode: str, extra_args: 
         app.init_ui(opts)
         may_show_progress(app, 50, "loading user interface")
         app.load()
-        opts.encoding = handle_client_encoding_option(app, opts.encoding)
         if request_mode:
             sns = get_start_new_session_dict(opts, request_mode, extra_args)
             extra_args = [f"socket:{opts.system_proxy_socket}"]
@@ -1455,14 +1450,9 @@ def get_client_gui_app(error_cb: Callable, opts, request_mode: str, extra_args: 
     return app
 
 
-def normalize_client_encoding_option(encoding: str) -> str:
-    # `auto` is the command-line spelling of no preference.  Subsystems read
-    # this option during init, before validation below has access to codecs.
-    return "" if encoding == "auto" else encoding
-
-
 def handle_client_encoding_option(app, encoding: str) -> str:
-    encoding = normalize_client_encoding_option(encoding)
+    if encoding == "auto":
+        encoding = ""
     if not encoding:
         return ""
     from xpra.client.base import features
@@ -2475,10 +2465,7 @@ def run_proxy(error_cb: Callable, opts, script_file: str, cmdline: list[str], ar
                 start_thread(proc.wait, "server-startup-reaper")
     if not display:
         # use display specified on command line:
-        try:
-            display = pick_display(error_cb, opts, args, cmdline)
-        except ValueError as e:
-            raise InitExit(ExitCode.SERVER_NOT_FOUND, str(e)) from None
+        display = pick_display(error_cb, opts, args, cmdline)
     delpath = ""
     if display and not server_mode.startswith("shadow"):
         display_name = display_name or display.get("display") or display.get("display_name")
@@ -2857,11 +2844,7 @@ def run_clean_sockets(opts, args) -> ExitValue:
                                      matching_display=matching_display)
     if matching_display and not results:
         raise InitInfo(f"no UNKNOWN socket for display {matching_display!r}")
-    # `socket_details` returns a dict of socket_dir -> [(state, display, sockpath), ..],
-    # but `clean_sockets` wants a list of (socket_dir, display, sockpath):
-    sockets = [(socket_dir, display, sockpath)
-               for socket_dir, values in results.items() for _, display, sockpath in values]
-    clean_sockets(dotxpra, sockets)
+    clean_sockets(dotxpra, results)
     return ExitCode.OK
 
 

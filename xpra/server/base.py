@@ -538,10 +538,7 @@ class ServerBase(ServerBaseClass):
 
     def handle_invalid_packet(self, proto, packet: Packet) -> None:
         ss = self.get_server_source(proto)
-        detached = ss is None and proto not in self._potential_protocols
-        if detached:
-            netlog("packet from detached protocol %s: %s", proto, packet)
-        elif not self._closing and not proto.is_closed() and (ss is None or not ss.is_closed()):
+        if not self._closing and not proto.is_closed() and (ss is None or not ss.is_closed()):
             netlog("invalid packet: %s", packet)
             packet_type = packet.get_type()
             netlog.error(f"Error: unknown or invalid packet type {packet_type!r}")

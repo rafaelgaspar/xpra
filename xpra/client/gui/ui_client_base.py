@@ -16,7 +16,7 @@ from xpra.platform.gui import ready as gui_ready, get_wm_name, get_session_type
 from xpra.common import noerr, may_notify_client
 from xpra.net.constants import ConnectionMessage
 from xpra.constants import NotificationID
-from xpra.net.common import Packet, print_proxy_caps, FULL_INFO, BACKWARDS_COMPATIBLE, MIN_PROTOCOL_VERSION
+from xpra.net.common import Packet, print_proxy_caps, FULL_INFO, BACKWARDS_COMPATIBLE
 from xpra.net.packet_type import CURSOR_SET, KEYBOARD_SYNC
 from xpra.os_util import gi_import
 from xpra.util.child_reaper import reaper_cleanup
@@ -92,7 +92,6 @@ class UIXpraClient(ClientBaseClass):
 
         # state:
         self._on_server_setting_changed: dict[str, Sequence[Callable[[str, Any], None]]] = {}
-        self.redraw_timer = 0
 
     def init(self, opts) -> None:
         """ initialize variables from configuration """
@@ -133,7 +132,6 @@ class UIXpraClient(ClientBaseClass):
 
     def cleanup(self) -> None:
         log("UIXpraClient.cleanup()")
-        self.cancel_redraw_timer()
         for c in CLIENT_BASES:
             sublog("%s.cleanup()", c)
             c.cleanup(self)
@@ -246,18 +244,6 @@ class UIXpraClient(ClientBaseClass):
             c.setup_connection(self, conn)
 
     def parse_server_capabilities(self, c: typedict) -> bool:
-        # Servers running in backwards-compatible mode send the legacy packet
-        # names and capabilities layout that a non-compatible client cannot
-        # handle.
-        min_version = c.inttupleget("protocol-version")
-        if not BACKWARDS_COMPATIBLE and self._protocol.TYPE != "rfb" and (
-                not min_version or min_version < MIN_PROTOCOL_VERSION):
-            self.warn_and_quit(
-                ExitCode.INCOMPATIBLE_VERSION,
-                "the server is running in backwards compatible mode, which is not supported by clients "
-                "using `XPRA_BACKWARDS_COMPATIBLE=0`",
-            )
-            return False
         for cb in CLIENT_BASES:
             sublog("%s.parse_server_capabilities(..)", cb)
             try:
@@ -432,10 +418,11 @@ class UIXpraClient(ClientBaseClass):
 
     def schedule_timer_redraw(self) -> None:
         log("schedule_timer_redraw()")
-        if self.redraw_timer:
-            return
 
         def timer_redraw() -> bool:
+            if self._protocol is None:
+                # no longer connected!
+                return False
             ok = self._server_ok and not FORCE_ALERT
             log("timer_redraw() ok=%s", ok)
             # ensure every window has the latest state:
@@ -443,18 +430,10 @@ class UIXpraClient(ClientBaseClass):
                 if not window.is_tray():
                     window.set_alert_state(not ok)
             self.redraw_windows()
-            if ok:
-                self.redraw_timer = 0
             return not ok  # repaint again until ok
 
         self.idle_add(self.redraw_windows)
-        self.redraw_timer = self.timeout_add(100, timer_redraw)
-
-    def cancel_redraw_timer(self) -> None:
-        rt = self.redraw_timer
-        if rt:
-            self.redraw_timer = 0
-            self.source_remove(rt)
+        self.timeout_add(100, timer_redraw)
 
     def redraw_windows(self) -> None:
         # redraws all the windows without requesting a refresh from the server:

@@ -350,66 +350,6 @@ class TestPaintBoxEarlyReturn(unittest.TestCase):
         b.paint_box("h264", 10, 20, 80, 60)
 
 
-class TestScrollPaints(unittest.TestCase):
-
-    def test_negative_origin_is_clipped(self):
-        from xpra.opengl.backing import N_TEXTURES
-        b = _make_mock_backing()
-        b.size = 100, 80
-        b.offscreen_fbo = 10
-        b.tmp_fbo = 11
-        b.textures = list(range(N_TEXTURES))
-        with (
-            patch.object(b, "copy_fbo"),
-            patch.object(b, "paint_box"),
-            patch.object(b, "painted"),
-            patch("xpra.opengl.backing.glBindFramebuffer"),
-            patch("xpra.opengl.backing.glFramebufferTexture2D"),
-            patch("xpra.opengl.backing.glReadBuffer"),
-            patch("xpra.opengl.backing.glBindTexture"),
-            patch("xpra.opengl.backing.glFlush"),
-            patch("xpra.opengl.backing.glBlitFramebuffer") as blit,
-        ):
-            b.do_scroll_paints(object(), [(-10, -5, 30, 20, 5, 3)], 0, [])
-        blit.assert_called_once_with(
-            0, 80, 20, 65,
-            5, 77, 25, 62,
-            unittest.mock.ANY, unittest.mock.ANY,
-        )
-
-    def test_scroll_snapshot_is_restored_for_each_rectangle(self):
-        from OpenGL.GL import GL_COLOR_ATTACHMENT0, GL_READ_FRAMEBUFFER, GL_TEXTURE_RECTANGLE
-        from xpra.opengl.backing import N_TEXTURES, TEX_TMP_FBO
-        b = _make_mock_backing()
-        b.size = 100, 80
-        b.offscreen_fbo = 10
-        b.tmp_fbo = 11
-        b.textures = list(range(N_TEXTURES))
-        events = []
-
-        def attached(framebuffer, attachment, target, texture, level):
-            if framebuffer == GL_READ_FRAMEBUFFER and texture == b.textures[TEX_TMP_FBO]:
-                assert attachment == GL_COLOR_ATTACHMENT0
-                assert target == GL_TEXTURE_RECTANGLE
-                assert level == 0
-                events.append("snapshot")
-
-        with (
-            patch.object(b, "copy_fbo"),
-            patch.object(b, "paint_box", side_effect=lambda *args: events.append("paint")),
-            patch.object(b, "painted"),
-            patch("xpra.opengl.backing.glBindFramebuffer"),
-            patch("xpra.opengl.backing.glFramebufferTexture2D", side_effect=attached),
-            patch("xpra.opengl.backing.glReadBuffer"),
-            patch("xpra.opengl.backing.glBindTexture"),
-            patch("xpra.opengl.backing.glFlush"),
-            patch("xpra.opengl.backing.glBlitFramebuffer", side_effect=lambda *args: events.append("blit")),
-        ):
-            b.do_scroll_paints(object(), [(0, 0, 20, 20, 5, 0), (30, 20, 10, 10, 0, 5)], 0, [])
-
-        assert events == ["snapshot", "blit", "paint", "snapshot", "blit", "paint"]
-
-
 # ---------------------------------------------------------------------------
 # GL context tests: require an actual OpenGL context.
 # On Linux uses Xvfb + Mesa software rendering (LIBGL_ALWAYS_SOFTWARE=1).
@@ -419,22 +359,17 @@ class TestScrollPaints(unittest.TestCase):
 class TestGLInit(unittest.TestCase):
 
     xvfb = None
-    env_context = None
 
     @classmethod
     def setUpClass(cls):
         import time
         if os.name == "posix" and sys.platform != "darwin":
-            from xpra.util.env import OSEnvContext
-            from unit.process_test_util import DisplayContext, ProcessTestUtil
-            # the environment is restored in `tearDownClass`,
-            # so that the tests running after this class
-            # are not left with a `DISPLAY` pointing at the Xvfb we will have killed:
-            cls.env_context = OSEnvContext(LIBGL_ALWAYS_SOFTWARE="1", GDK_BACKEND="x11")
-            cls.env_context.__enter__()
+            from unit.process_test_util import ProcessTestUtil
             ProcessTestUtil.setUpClass()
             cls.ptu = ProcessTestUtil()
             cls.ptu.setUp()
+            os.environ["LIBGL_ALWAYS_SOFTWARE"] = "1"
+            os.environ["GDK_BACKEND"] = "x11"
             cls.xvfb = cls.ptu.start_Xvfb()
             os.environ["DISPLAY"] = cls.xvfb.display or ""
             try:
@@ -442,21 +377,20 @@ class TestGLInit(unittest.TestCase):
                 wait_for_x_server(cls.xvfb.display or "", 10)
             except ImportError:
                 time.sleep(3)
-            DisplayContext.open_display_source(cls.xvfb.display or "")
+            from xpra.os_util import gi_import
+            Gdk = gi_import("Gdk")
+            Gdk.Display.open(cls.xvfb.display or "")
+            from xpra.x11.gtk.display_source import init_gdk_display_source
+            init_gdk_display_source()
 
     @classmethod
     def tearDownClass(cls):
         if cls.xvfb:
-            # close the display connection before killing the Xvfb, see `DisplayContext`:
-            from unit.process_test_util import DisplayContext, ProcessTestUtil
-            DisplayContext.close_display_source()
             cls.xvfb.terminate()
             cls.xvfb = None
+            from unit.process_test_util import ProcessTestUtil
             cls.ptu.tearDown()
             ProcessTestUtil.tearDownClass()
-        if cls.env_context:
-            cls.env_context.__exit__()
-            cls.env_context = None
 
     def _make_gl_backing(self, window_alpha=False, pixel_depth=0):
         from xpra.os_util import gi_import

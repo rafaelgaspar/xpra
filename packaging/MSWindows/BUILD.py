@@ -1244,12 +1244,10 @@ def export_sbom() -> None:
 
 
 def verpatch() -> None:
-    verpatch_exe = find_command("verpatch", "VERPATCH",
-                                "packaging/MSWindows/tools/verpatch.exe")
     EXCLUDE = ("plink", "openssh", "openssl", "paexec")
 
     def run_verpatch(filename: str, descr: str) -> None:
-        log_command([verpatch_exe, filename,
+        log_command(["verpatch", filename,
                      "/s", "desc", descr,
                      "/va", version_info.padded,
                      "/s", "company", "xpra.org",

@@ -12,7 +12,7 @@ from collections.abc import Sequence
 
 from xpra.os_util import gi_import
 from xpra.net.common import FULL_INFO, BACKWARDS_COMPATIBLE
-from xpra.server.common import may_update_bandwidth_limits, wants_windows
+from xpra.server.common import may_update_bandwidth_limits
 from xpra.server.source.stub import StubClientConnection
 from xpra.server.window import batch_config
 from xpra.server.core import ClientException
@@ -53,7 +53,7 @@ class EncodingsConnection(StubClientConnection):
     def is_needed(cls, caps: typedict) -> bool:
         if BACKWARDS_COMPATIBLE and "encoding" in caps:
             return True
-        return bool(caps.dictget("encoding") or caps.strtupleget("encodings")) or wants_windows(caps)
+        return bool(caps.dictget("encoding") or caps.strtupleget("encodings")) or caps.boolget("windows")
 
     def init_state(self) -> None:
         # contains default values, some of which may be supplied by the client:
@@ -153,8 +153,7 @@ class EncodingsConnection(StubClientConnection):
         packet_type = "encodings" if BACKWARDS_COMPATIBLE else "encoding-set"
         self.send_async(packet_type, {"encodings": d, "video": video})
         # only print encoding info when not using mmap:
-        mmap_write_area = getattr(self, "mmap_write_area", None)
-        if not mmap_write_area or not mmap_write_area.enabled:
+        if getattr(self, "mmap_size", 0) == 0:
             self.print_encoding_info()
 
     def recalculate_delays(self) -> None:
@@ -302,14 +301,13 @@ class EncodingsConnection(StubClientConnection):
         self.parse_encoding_caps(c, eopts)
 
     def parse_encoding_caps(self, c: typedict, eopts: typedict) -> None:
-        window_requested = wants_windows(c)
         if not BACKWARDS_COMPATIBLE:
             # should not be used, so blank it:
             c = typedict()
         self.encoding_options.update(eopts)
         self.encodings = eopts.strtupleget("options") or c.strtupleget("encodings")
         self.core_encodings = eopts.strtupleget("core") or c.strtupleget("encodings.core", self.encodings)
-        if not self.core_encodings and window_requested:
+        if not self.core_encodings:
             raise ClientException("client failed to specify any supported encodings")
         self.full_csc_modes = eopts.dictget("full_csc_modes") or {}
         log("encodings=%s, core_encodings=%s", self.encodings, self.core_encodings)
@@ -379,7 +377,7 @@ class EncodingsConnection(StubClientConnection):
             self.allocate_cuda_device_context()
 
     def wants_cuda_device(self) -> bool:
-        if getattr(self, "mmap_write_area", None):
+        if getattr(self, "mmap_enabled", False):
             return False
         from xpra.codecs.loader import has_codec
         common_encodings = set(x for x in self.encodings if x in self.server_encodings)

@@ -49,7 +49,7 @@ class Win32Hooks:
 
     def __init__(self, hwnd: int):
         self._hwnd = hwnd
-        self._message_map: dict[int, Callable[[int, int, int, int], int | None]] = {}
+        self._message_map: dict[int, Callable[[int, int, int, int], int]] = {}
         self.max_size = (0, 0)
         self.min_size = (0, 0)
         self.frame_width = 4

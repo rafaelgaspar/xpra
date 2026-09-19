@@ -61,10 +61,8 @@ if OSX or WIN32:   # pragma: no cover
 
 def remove_dupes(seq: Iterable[Any]) -> list[Any]:
     seen: set[Any] = set()
-    # note: `x not in seen and not seen.add(x)` rather than the more common
-    # `not (x in seen or seen.add(x))`: Cython 3.3.0 miscompiles the latter
-    # inside a comprehension filter (it gets evaluated to a constant)
-    return [x for x in seq if x not in seen and not seen.add(x)]
+    seen_add: Callable = seen.add
+    return [x for x in seq if not (x in seen or seen_add(x))]
 
 
 _has_audio_support: bool | None = None
@@ -511,9 +509,7 @@ def read_xpra_conf(conf_dir: str) -> dict[str, Any]:
         debug(f"invalid config directory: {cdir!r}")
         return {}
     import glob
-    # `conf.d` files are sorted so that their numeric prefix defines the order
-    # in which they are applied, ie: "90_configure_tool.conf" overrides "55_server_x11.conf"
-    files = glob.glob(f"{cdir}/{DEFAULT_XPRA_CONF_FILENAME}") + sorted(glob.glob(f"{cdir}/conf.d/*.conf"))
+    files = glob.glob(f"{cdir}/{DEFAULT_XPRA_CONF_FILENAME}") + glob.glob(f"{cdir}/conf.d/*.conf")
     debug(f"read_xpra_conf({conf_dir}) found conf files: {files}")
     d = {}
     for f in files:
@@ -1642,10 +1638,7 @@ def fixup_keyboard(options) -> None:
     # variants and layouts can be specified as CSV, convert them to lists:
     def p(v) -> list[str]:
         try:
-            if isinstance(v, str):
-                # `str` is also a `Sequence`, and iterating one yields characters:
-                seq = v.split(",")
-            elif isinstance(v, Sequence):
+            if isinstance(v, Sequence):
                 seq = v
             else:
                 seq = str(v).split(",")

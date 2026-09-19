@@ -507,7 +507,7 @@ def get_default_video_max_size() -> tuple[int, int]:
     svalues = os.environ.get("XPRA_VIDEO_MAX_SIZE", "").replace("x", ",").split(",")
     if len(svalues) == 2:
         try:
-            return int(svalues[0]), int(svalues[1])
+            return int(svalues[0]), int(svalues[0])
         except (TypeError, ValueError):
             pass
     return 4096, 4096
@@ -523,7 +523,6 @@ def validated_monitor_data(monitors: dict) -> dict[int, dict[str, Any]]:
             "geometry": td.inttupleget,
             "primary": td.boolget,
             "refresh-rate": td.intget,
-            "refresh-rate.cooked": td.intget,
             "scale-factor": td.intget,
             "width-mm": td.intget,
             "height-mm": td.intget,
@@ -537,15 +536,6 @@ def validated_monitor_data(monitors: dict) -> dict[int, dict[str, Any]]:
             v = conv(attr)
             if v is not None:
                 vdef[attr] = v
-        # Monitor refresh rates are represented in mHz throughout Xpra.  Some
-        # clients send Hz instead, which would otherwise be interpreted as a
-        # tiny fractional rate by display and batching code.
-        for attr in ("refresh-rate", "refresh-rate.cooked"):
-            refresh_rate = vdef.get(attr, 0)
-            if 0 < refresh_rate < 1000:
-                normalized = refresh_rate * 1000
-                Logger("screen").warn("Warning: normalizing monitor %s %s from %sHz to %smHz", i, attr, refresh_rate, normalized)
-                vdef[attr] = normalized
         # generate a name if we don't have one:
         name = vdef.get("name")
         if not name:

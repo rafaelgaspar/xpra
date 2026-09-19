@@ -19,7 +19,6 @@ from xpra.util.objects import typedict
 from xpra.util.str_fn import bytestostr
 from xpra.util.env import envint, envbool, first_time, ignorewarnings, IgnoreWarningsContext
 from xpra.util.gobject import no_arg_signal
-from xpra.gtk.info import get_monitor_plug_name
 from xpra.gtk.util import get_default_root_window
 from xpra.gtk.window import set_visual
 from xpra.gtk.pixbuf import get_pixbuf_from_data
@@ -855,8 +854,7 @@ class GTKClientWindowBase(ClientWindowBase, Gtk.Window):
         log("restack(%s, %s)", other_window, above)
 
         def do_restack() -> None:
-            other_gdk_window = other_window.get_window() if other_window else None
-            self.get_window().restack(other_gdk_window, above)
+            self.get_window().restack(other_window, above)
 
         self.when_realized("restack", do_restack)
 
@@ -1287,7 +1285,20 @@ class GTKClientWindowBase(ClientWindowBase, Gtk.Window):
                 mid = i
                 break
         geom = monitor.get_geometry()
-        plug_name = get_monitor_plug_name(monitor)
+        manufacturer = monitor.get_manufacturer()
+        model = monitor.get_model()
+        if manufacturer == "unknown":
+            manufacturer = ""
+        if model == "unknown":
+            model = ""
+        if manufacturer and model:
+            plug_name = "%s %s" % (manufacturer, model)
+        elif manufacturer:
+            plug_name = manufacturer
+        elif model:
+            plug_name = model
+        else:
+            plug_name = ""
         plug_name += " %ix%i" % (geom.width, geom.height)
         if geom.x or geom.y:
             plug_name += " at %i,%i" % (geom.x, geom.y)

@@ -99,16 +99,13 @@ class EncoderServer(ServerBase):
         return "EncoderServer"
 
     def init(self, opts) -> None:
-        # this also dispatches `init` to all the subsystems used below:
         super().init(opts)
         from xpra.codecs.pillow.encoder import get_encodings
         encodings = get_encodings()
-        if enc := self.get_subsystem("encoding"):
-            if enc.encoding not in ("auto", ) and enc.encoding not in encodings:
-                raise ValueError(f"unsupported encoding {enc.encoding!r}")
-        if sharing := self.get_subsystem("sharing"):
-            # default to True rather than None (aka "auto"):
-            sharing.sharing = sharing.sharing is not False
+        if self.encoding not in ("auto", ) and self.encoding not in encodings:
+            raise ValueError(f"unsupported encoding {self.encoding!r}")
+        # default to True rather than None (aka "auto"):
+        self.sharing = self.sharing is not False
 
     def cleanup_source(self, source) -> None:
         if encoders := self.encoders.pop(source.uuid, {}):
@@ -203,20 +200,8 @@ class EncoderServer(ServerBase):
                         log(f" supported pixel formats for {encoding!r}: %s", csv(input_cs_options))
                         raise ValueError(msg)
                 add_device_context(ss, options)
-                try:
-                    encoder.init_context(encoding, width, height, pixel_format, typedict(options))
-                    bdata, client_options = encoder.compress_image(image, typedict(options))
-                finally:
-                    # A one-shot encoder has no owner after this request.
-                    # Always clean it explicitly so its CUDA resources are
-                    # released under the correct context rather than from
-                    # Encoder.__dealloc__.
-                    try:
-                        encoder.clean()
-                    except Exception:
-                        # Do not replace a successful encode result or mask
-                        # the original encode failure with a cleanup error.
-                        log.error(f"Error cleaning one-shot encoder {encoder}", exc_info=True)
+                encoder.init_context(encoding, width, height, pixel_format, typedict(options))
+                bdata, client_options = encoder.compress_image(image, typedict(options))
                 bpp = 24
                 stride = 0
                 coding = encoding

@@ -11,6 +11,7 @@ from xpra.net.common import BACKWARDS_COMPATIBLE
 from xpra.util.objects import typedict
 from xpra.util.env import envbool
 from xpra.os_util import get_machine_id
+from xpra.net.file_transfer import FileTransferHandler
 from xpra.auth.auth_helper import AuthDef
 from xpra.server.source.stub import StubClientConnection
 from xpra.log import Logger
@@ -41,16 +42,7 @@ def find_auth_password_file(auth_defs: Sequence[AuthDef]) -> str:
     return ""
 
 
-class PrinterConnection(StubClientConnection):
-    """
-    Printer forwarding.
-    `printing` / `remote_printing` / `remote_printing_ask` and the packets carrying
-    the print jobs are all part of the same `FileTransferHandler` state as regular
-    file transfers - which `FileConnection` owns, and which it mixes in whenever
-    printing is advertised (see `FileConnection.is_needed`).
-    So this subsystem has no `FileTransferHandler` of its own,
-    it owns only the printer configuration state.
-    """
+class PrinterConnection(FileTransferHandler, StubClientConnection):
 
     @classmethod
     def is_needed(cls, caps: typedict) -> bool:
@@ -68,22 +60,19 @@ class PrinterConnection(StubClientConnection):
         self.remove_printers()
 
     def parse_client_caps(self, c: typedict) -> None:
-        # `parse_printer_caps` comes from the `FileConnection` half of this instance:
-        self.parse_printer_caps(c)
+        FileTransferHandler.parse_printer_caps(self, c)
         self.machine_id = c.strget("machine_id")
 
     def get_info(self) -> dict[str, Any]:
         return {
             "printer": {
                 "devices": self.printers,
-                "printing": self.printing,
-                "printing-ask": self.printing_ask,
+                "file-transfers": FileTransferHandler.get_info(self),
             },
         }
 
     def init_from(self, _protocol, server) -> None:
-        # no `init_attributes()` here: the file-transfer attributes are shared with
-        # `FileConnection` (same instance), which is the subsystem that owns them
+        self.init_attributes()
         self.unix_socket_paths: list[str] = server.unix_socket_paths
         # copy attributes
         for x in (

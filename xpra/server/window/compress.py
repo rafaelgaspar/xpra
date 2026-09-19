@@ -297,16 +297,14 @@ class WindowSource(WindowIconSource):
         self.maximized: bool = False          # set by the client!
         self.iconic: bool = False
         self.window_signal_handlers = []
-        # Watch for changes before reading the value: content-type guessing is
-        # asynchronous and may otherwise complete in between.
-        self.content_types: tuple[str, ...] = ()
+        # watch for changes to properties that are used to derive the content-type:
+        self.content_types: str = window.get("content-types", ()) or window.get("content-type", "").split(",")
         if "content-type" in window.get_dynamic_property_names():
             sid = window.connect("notify::content-type", self.content_type_changed)
             self.window_signal_handlers.append(sid)
         if "content-types" in window.get_dynamic_property_names():
             sid = window.connect("notify::content-types", self.content_type_changed)
             self.window_signal_handlers.append(sid)
-        self.content_types = self.get_content_types(window)
         if "iconic" in window.get_dynamic_property_names():
             self.iconic = window.get_property("iconic")
             sid = window.connect("notify::iconic", self._iconic_changed)
@@ -525,8 +523,6 @@ class WindowSource(WindowIconSource):
         self._damage_packet_sequence: int = 1
 
     def cleanup(self) -> None:
-        # `WindowIconSource.cleanup` cancels the window icon timer:
-        super().cleanup()
         self.cancel_damage(MAX_SEQUENCE)
         log("encoding_totals for wid=%#x with primary encoding=%s : %s",
             self.wid, self.encoding, self.statistics.encoding_totals)
@@ -778,14 +774,10 @@ class WindowSource(WindowIconSource):
         return True
 
     def content_type_changed(self, window, *args) -> bool:
-        self.content_types = self.get_content_types(window)
+        self.content_types = window.get("content-types", ()) or window.get("content-type", "").split(",")
         log("content_type_changed(%s, %s) content-types=%s", window, args, self.content_types)
         self.reconfigure(True)
         return True
-
-    @staticmethod
-    def get_content_types(window) -> tuple[str, ...]:
-        return tuple(window.get("content-types", ()))
 
     def quality_changed(self, window, *args) -> bool:
         self._quality_hint = window.get("quality", -1)
@@ -1264,18 +1256,12 @@ class WindowSource(WindowIconSource):
         self.cancel_decode_error_refresh_timer()
         # if a region was delayed, we can just drop it now:
         self.refresh_regions = []
-        dropped = self._damage_delayed
         self._damage_delayed = None
         # make sure we don't account for those as they will get dropped
         # (generally before encoding - only one may still get encoded):
         for sequence in tuple(self.statistics.encoding_pending.keys()):
             if self._damage_cancelled >= sequence:
                 self.statistics.encoding_pending.pop(sequence, None)
-        if dropped is not None:
-            # A delayed region has not reached send_delayed_regions(), which
-            # normally acknowledges it before extraction.  Tell the window
-            # now so a Wayland client is not left throttled forever.
-            self.window.acknowledge_changes()
 
     def cancel_expire_timer(self) -> None:
         if et := self.expire_timer:
@@ -2238,8 +2224,7 @@ class WindowSource(WindowIconSource):
         w = image.get_width()
         h = image.get_height()
         item = (w, h, damage_time, now, image, coding, sequence, eoptions, flush)
-        # not optional: the encode thread now owns this image and must free it
-        self.call_in_encode_thread(False, self.make_data_packet_cb, *item)
+        self.call_in_encode_thread(True, self.make_data_packet_cb, *item)
         log("process_damage_region: wid=%#x, sequence=%i, adding pixel data to encode queue (%4ix%-4i - %5s), elapsed time: %3.1f ms, request time: %3.1f ms",
             self.wid, sequence, w, h, coding, 1000 * (now - damage_time), elapsed)
 
@@ -2280,7 +2265,7 @@ class WindowSource(WindowIconSource):
         if not packet:
             return
         # queue packet for sending:
-        self.queue_damage_packet(packet, damage_time, process_damage_time, options)
+        self.queue_damage_packet(packet, damage_time, process_damage_time)
 
     def schedule_auto_refresh(self, packet: Packet, options: typedict) -> None:
         if not self.can_refresh():
@@ -2528,17 +2513,14 @@ class WindowSource(WindowIconSource):
             "speed"         : self.refresh_speed,
         }
 
-    def queue_damage_packet(self, packet: Packet, damage_time: float,
-                            process_damage_time: float, options: typedict) -> None:
+    def queue_damage_packet(self, packet: Packet, damage_time: float, process_damage_time: float) -> None:
         """
             Adds the given packet to the packet_queue,
             (warning: this runs from the non-UI 'encode' thread)
             we also record a number of statistics:
             - damage packet queue size
             - number of pixels in damage packet queue
-            - damage latency
-            this is also where the auto-refresh is scheduled,
-            since this is where every draw packet ends up
+            - damage latency (via a callback once the packet is actually sent)
         """
         # packet = ["draw", wid, x, y, w, h, coding, data, self._damage_packet_sequence, rowstride, client_options]
         width = packet.get_u16(4)
@@ -2561,9 +2543,6 @@ class WindowSource(WindowIconSource):
         stats.last_packet_time = monotonic()
         if SCREEN_UPDATES_DIRECTORY:
             self.save_update(packet, damage_time)
-        # whilst the packet is still ours: lossy updates schedule a refresh,
-        # lossless ones clear the regions they have covered
-        self.schedule_auto_refresh(packet, options)
         self.queue_packet(packet, self.wid, pixcount, client_options.get("flush", 0) > 0)
 
     def save_update(self, packet: Packet, damage_time: float) -> None:
@@ -2936,7 +2915,7 @@ class WindowSource(WindowIconSource):
                     w, h, x, y, self.wid, coding,
                     100.0 * csize / psize, ceil(psize/1024), ceil(csize/1024),
                     self._damage_packet_sequence, client_info, options)
-        self.queue_damage_packet(packet, damage_time, process_damage_time, options)
+        self.queue_damage_packet(packet, damage_time, process_damage_time)
 
     def mmap_encode(self, coding: str, image: ImageWrapper, _options) -> tuple:
         assert coding == "mmap"

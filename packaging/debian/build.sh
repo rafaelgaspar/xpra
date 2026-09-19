@@ -1,7 +1,5 @@
 #!/bin/bash
 
-set -e
-
 BASH="bash -x"
 if [ "${DEBUG:-0}" == "1" ]; then
 	BASH="bash -x"

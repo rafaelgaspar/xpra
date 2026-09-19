@@ -7,11 +7,6 @@
 
 #include <stdint.h>
 
-__device__ __forceinline__ uint8_t quant(float value)
-{
-    return (uint8_t)min(max(__float2int_rn(value), 0), 255);
-}
-
 // Y = 0.299 * R + 0.587 * G + 0.114 * B + 0
 #define YR 0.299
 #define YG 0.587
@@ -32,24 +27,27 @@ extern "C" __global__ void XRGB_to_YUV444(uint8_t *srcImage, int src_w, int src_
                              uint8_t *dstImage, int dst_w, int dst_h, int dstPitch,
                              int w, int h)
 {
-    const int gx = blockIdx.x * blockDim.x + threadIdx.x;
-    const int gy = blockIdx.y * blockDim.y + threadIdx.y;
-    if (gx >= dst_w || gy >= dst_h) {
-        return;
+    const uint32_t gx = blockIdx.x * blockDim.x + threadIdx.x;
+    const uint32_t gy = blockIdx.y * blockDim.y + threadIdx.y;
+    const uint32_t src_y = gy * src_h / dst_h;
+    const uint32_t src_x = gx * src_w / dst_w;
+
+    if ((src_x < w) & (src_y < h)) {
+        uint8_t R;
+        uint8_t G;
+        uint8_t B;
+        //one 32-bit RGB pixel at a time:
+        uint32_t si = (src_y * srcPitch) + src_x * 4;
+        R = srcImage[si+1];
+        G = srcImage[si+2];
+        B = srcImage[si+3];
+
+        uint32_t di;
+        di = (gy * dstPitch) + gx;
+        dstImage[di] = __float2int_rn(YR * R + YG * G + YB * B + YC);
+        di += dstPitch*dst_h;
+        dstImage[di] = __float2int_rn(UR * R + UG * G + UB * B + UC);
+        di += dstPitch*dst_h;
+        dstImage[di] = __float2int_rn(VR * R + VG * G + VB * B + VC);
     }
-
-    //edge-extend the valid content into the aligned output padding
-    const int src_y = min(gy * src_h / dst_h, h - 1);
-    const int src_x = min(gx * src_w / dst_w, w - 1);
-    const uint32_t si = (src_y * srcPitch) + src_x * 4;
-    const uint8_t R = srcImage[si+1];
-    const uint8_t G = srcImage[si+2];
-    const uint8_t B = srcImage[si+3];
-
-    uint32_t di = (gy * dstPitch) + gx;
-    dstImage[di] = quant(YR * R + YG * G + YB * B + YC);
-    di += dstPitch*dst_h;
-    dstImage[di] = quant(UR * R + UG * G + UB * B + UC);
-    di += dstPitch*dst_h;
-    dstImage[di] = quant(VR * R + VG * G + VB * B + VC);
 }

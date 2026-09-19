@@ -1,9 +1,8 @@
-cudaroot=./cuda
-libdir=${cudaroot}/lib/x64
-includedir=${cudaroot}/include
+libdir=/mingw64/bin
+includedir=/mingw64/include
 
 Name: nvjpeg
 Description: Library for the nvjpeg GPU compression
-Version: 13
-Cflags: "-I${includedir}" -Wno-error
-Libs: "-L${libdir}" -lnvjpeg
+Version: 12
+Cflags: -I${includedir} -Wno-error
+Libs: -L${libdir} -lnvjpeg64_12

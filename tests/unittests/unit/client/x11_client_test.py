@@ -38,8 +38,8 @@ class X11ClientTest(X11ClientTestUtil):
             # starting a second client should disconnect the first when not sharing
             assert pollwait(client1, 2) is not None, "the first client should have been disconnected"
         # killing the Xvfb should kill the client
-        self.terminate_and_wait(xvfb1)
-        self.terminate_and_wait(xvfb2)
+        xvfb1.terminate()
+        xvfb2.terminate()
         assert pollwait(xvfb1, CLIENT_TIMEOUT) is not None, "xvfb1 has not terminated"
         assert pollwait(xvfb2, CLIENT_TIMEOUT) is not None, "xvfb2 has not terminated"
         assert pollwait(client1, CLIENT_TIMEOUT) is not None, "client1 has not terminated"
@@ -59,13 +59,13 @@ class X11ClientTest(X11ClientTestUtil):
         client_display = self.find_free_display()
         xvfb = self.start_Xvfb(client_display, screens=[(1024,768), (1200, 1024)])
         # multiscreen requires Xvfb, which may not support opengl:
-        self.terminate_and_wait(self.do_run_client(client_display, "--opengl=no"))
-        self.terminate_and_wait(xvfb)
+        self.do_run_client(client_display, "--opengl=no").terminate()
+        xvfb.terminate()
 
     def Xtest_nocomposite(self):
         client_display = self.find_free_display()
         self.start_Xvfb(client_display, extensions=("-Composite"))
-        self.terminate_and_wait(self.do_run_client(client_display))
+        self.do_run_client(client_display).terminate()
 
     def _test_client_depth(self, server_display):
         # start vfb with display-depth:
@@ -78,9 +78,9 @@ class X11ClientTest(X11ClientTestUtil):
                                                 "--pixel-depth=%i" % client_depth)
                     r = pollwait(client, 5)
                     assert r is None, "client has terminated with exit code %i" % r
-                    self.terminate_and_wait(client)
+                    client.terminate()
             finally:
-                self.terminate_and_wait(xvfb)
+                xvfb.terminate()
 
     def test_depth(self):
         for server_depth in (16, 24, 30):
@@ -117,9 +117,9 @@ class X11ClientTest(X11ClientTestUtil):
             os.unlink(filename)
         finally:
             if client:
-                self.terminate_and_wait(client)
+                client.terminate()
             if xvfb:
-                self.terminate_and_wait(xvfb)
+                xvfb.terminate()
             if server:
                 server.terminate()
             f.close()

@@ -22,7 +22,6 @@ log = Logger("window", "pointer")
 
 SMOOTH_SCROLL = envbool("XPRA_SMOOTH_SCROLL", True)
 SMOOTH_SCROLL_NORM = envint("XPRA_SMOOTH_SCROLL_NORM", 50 if OSX else 100)
-SKIP_DUPLICATE_SCROLL_EVENTS = envbool("XPRA_SKIP_DUPLICATE_SCROLL_EVENTS", True)
 SIMULATE_MOUSE_DOWN = envbool("XPRA_SIMULATE_MOUSE_DOWN", True)
 SIMULATE_MOUSE_UP = envbool("XPRA_SIMULATE_MOUSE_UP", True)
 BUTTON_POLLING_DELAY = envint("XPRA_BUTTON_POLLING_DELAY", 50)
@@ -290,10 +289,6 @@ class PointerWindow(GtkStubWindow):
             norm_y = norm_scroll(event.delta_y)
             self._client.wheel_event(device_id, self.wid, norm_x, -norm_y, pointer)
             return True
-        pointer_sub = self.get_subsystem("pointer")
-        if SKIP_DUPLICATE_SCROLL_EVENTS and pointer_sub and pointer_sub.wheel_smooth and event.get_pointer_emulated():
-            log("ignoring emulated scroll event: direction=%i", event.direction)
-            return True
         button_mapping = GDK_SCROLL_MAP.get(event.direction, -1)
         log("do_scroll_event device=%s, direction=%s, button_mapping=%s",
             _device_info(event), event.direction, button_mapping)
@@ -387,12 +382,7 @@ class PointerWindow(GtkStubWindow):
                 if SIMULATE_MOUSE_UP:
                     device_id = 0
                     wid = self.get_mouse_event_wid()
-                    # use the button we sent the press with:
-                    # the modifiers may have changed since, and `translate_button`
-                    # would then release a different button from the one held down
-                    server_button = self.button_pressed.get(button, -1)
-                    if server_button < 0:
-                        server_button = self.translate_button(button, modifiers)
+                    server_button = self.translate_button(button, modifiers)
                     sprops = {}
                     self._client.send_button(device_id, wid, server_button, False, pointer_data, modifiers, buttons,
                                              sprops)

@@ -184,8 +184,5 @@ def run_setting(setunset: bool, args) -> ExitValue:
             value = parse_fn(args[1])
         except (ValueError, TypeError):
             raise ValueError(f"{setting} not modified: unable to convert value {args[1]!r} to {otype!r}")
-    conf_file = update_config_attribute(setting, value)
-    if not conf_file:
-        return ExitCode.FILE_NOT_FOUND
-    get_logger().info(f"updated {conf_file!r}: {setting}={value}")
+    update_config_attribute(setting, value)
     return ExitCode.OK

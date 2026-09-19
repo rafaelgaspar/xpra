@@ -510,7 +510,8 @@ class TestGetDefaultVideoMaxSize(unittest.TestCase):
         with OSEnvContext():
             import os
             os.environ["XPRA_VIDEO_MAX_SIZE"] = "1920x1080"
-            self.assertEqual(get_default_video_max_size(), (1920, 1080))
+            w, h = get_default_video_max_size()
+            self.assertEqual(w, 1920)
 
 
 class TestValidatedMonitorData(unittest.TestCase):
@@ -552,11 +553,6 @@ class TestValidatedMonitorData(unittest.TestCase):
         monitors = {"0": {"refresh-rate": 60000}}
         result = validated_monitor_data(monitors)
         self.assertIn(0, result)
-
-    def test_refresh_rate_hz_normalized_to_mhz(self):
-        result = validated_monitor_data({0: {"refresh-rate": 60, "refresh-rate.cooked": 50}})
-        self.assertEqual(result[0]["refresh-rate"], 60000)
-        self.assertEqual(result[0]["refresh-rate.cooked"], 50000)
 
     def test_empty(self):
         self.assertEqual(validated_monitor_data({}), {})

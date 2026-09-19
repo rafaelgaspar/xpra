@@ -343,9 +343,7 @@ nvdec_ENABLED           = False
 nvfbc_ENABLED           = nvidia_ENABLED and not ARM and pkg_config_exists("nvfbc")
 cuda_kernels_ENABLED    = nvidia_ENABLED and (nvenc_ENABLED or nvjpeg_encoder_ENABLED)
 cuda_rebuild_ENABLED    = None if (nvidia_ENABLED and not WIN32) else False
-libyuv_pkgconfig        = pkg_config_exists("libyuv")
-libyuv_fallback         = not libyuv_pkgconfig and POSIX and not OSX and has_header_file("libyuv.h")
-csc_libyuv_ENABLED      = DEFAULT and (libyuv_pkgconfig or libyuv_fallback)
+csc_libyuv_ENABLED      = DEFAULT and pkg_config_exists("libyuv")
 gstreamer_ENABLED       = DEFAULT
 gstreamer_audio_ENABLED = gstreamer_ENABLED
 gstreamer_video_ENABLED = gstreamer_ENABLED and not OSX
@@ -1998,9 +1996,12 @@ if WIN32:
                         {"locale" : ["en"]},
                         {"themes" : ["Default"]}
                     ])
-            ICONS = ["scalable", "cursors", "index.theme"]
+            ICONS = ["24x24", "48x48", "scalable", "cursors", "index.theme"]
             for theme in ("Adwaita", ):   # "hicolor"
                 add_dir("share/icons/"+theme, ICONS)
+            add_dir("share/themes/Windows-10", [
+                "CREDITS", "LICENSE.md", "README.md",
+                "gtk-3.20", "index.theme"])
         if gtk3_ENABLED or audio_ENABLED:
             # causes warnings:
             # add_dir('lib', ["gio"])
@@ -2010,7 +2011,7 @@ if WIN32:
             add_gi(
                 "Atk-1.0",
                 "Notify-0.7",
-                "GDesktopEnums-3.0",
+                "GDesktopEnums-3.0", "Soup-2.4",
                 "GdkPixbuf-2.0", "Gdk-3.0", "Gtk-3.0",
                 "HarfBuzz-0.0",
                 "Pango-1.0", "PangoCairo-1.0", "PangoFT2-1.0",
@@ -2023,11 +2024,11 @@ if WIN32:
             # we no longer support GtkGL:
             # if opengl_ENABLED:
             #    add_gi("GdkGLExt-3.0", "GtkGLExt-3.0", "GL-1.0")
-            add_DLLs('curl')
+            add_DLLs('curl', 'soup')
 
         if client_ENABLED:
             # svg pixbuf loader:
-            add_DLLs("rsvg")
+            add_DLLs("rsvg", "croco")
             # gio module and `xpra.net.libproxy`:
             add_DLLs("proxy")
 
@@ -2594,18 +2595,6 @@ else:
                         break
                     except IndexError:
                         continue
-                if not epan_dir:
-                    # No versioned plugin directory exists on the build host.
-                    # Install in the unversioned platform directory instead.
-                    import sysconfig
-                    multiarch = sysconfig.get_config_var("MULTIARCH")
-                    if os.path.exists("/etc/debian_version"):
-                        libdir = f"/usr/lib/{multiarch}" if multiarch else "/usr/lib"
-                    elif os.path.exists("/usr/lib64") and not os.path.islink("/usr/lib64"):
-                        libdir = "/usr/lib64"
-                    else:
-                        libdir = f"/usr/lib/{multiarch}" if multiarch else "/usr/lib"
-                    epan_dir = f"{libdir}/wireshark/plugins"
                 self.copytodir("fs/lib/wireshark/plugins/xpra_dissector.lua", epan_dir)
 
             if docs_ENABLED:
@@ -2848,7 +2837,7 @@ if x11_ENABLED:
         ace("xpra.x11.bindings.keyboard", "xkbfile")
         ace("xpra.x11.bindings.res", "xres")
         ace("xpra.x11.bindings.composite", "xcomposite")
-        ace("xpra.x11.bindings.xkb", "xkbfile,x11")
+        ace("xpra.x11.bindings.xkb", "xkbfile")
         ace("xpra.x11.bindings.saveset", "x11")
         ace("xpra.x11.bindings.classhint", "x11")
         ace("xpra.x11.bindings.shm", "xext")
@@ -2996,22 +2985,12 @@ if cuda_kernels_ENABLED:
     if cuda_kernels_ENABLED:
         add_data_files(CUDA_BIN, [f"fs/share/xpra/cuda/{x}.fatbin" for x in kernels])
     if WIN32 and (nvjpeg_encoder_ENABLED or nvjpeg_decoder_ENABLED or nvenc_ENABLED or nvdec_ENABLED):
-        # cuda 13 moved the DLLs from `bin` to `bin/x64`:
-        CUDA_BIN_DIRS = tuple(os.path.abspath(f"./cuda/{subdir}") for subdir in ("bin/x64", "bin", ""))
-
-        def add_cuda_dll(name: str) -> None:
-            for cuda_bin_dir in CUDA_BIN_DIRS:
-                dlls = glob(f"{cuda_bin_dir}/{name}64*dll")
-                if dlls:
-                    add_data_files("", dlls)
-                    return
-            print(f"Warning: no {name!r} DLL found in {CUDA_BIN_DIRS}")
-
-        add_cuda_dll("cudart")
+        CUDA_BIN_DIR = os.path.abspath("./cuda/")
+        add_data_files("", glob(f"{CUDA_BIN_DIR}/cudart64*dll"))
         # if pycuda is built with curand, add this:
-        # add_cuda_dll("curand")
+        # add_data_files("", glob(f"{CUDA_BIN_DIR}/curand64*dll"))
         if nvjpeg_encoder_ENABLED or nvjpeg_decoder_ENABLED:
-            add_cuda_dll("nvjpeg")
+            add_data_files("", glob(f"{CUDA_BIN_DIR}/nvjpeg64*dll"))
 if cuda_kernels_ENABLED or is_DEB():
     add_data_files(CUDA_BIN, ["fs/share/xpra/cuda/README.md"])
 
@@ -3064,12 +3043,7 @@ toggle_packages(avif_ENABLED, "xpra.codecs.avif")
 tace(avif_encoder_ENABLED, "xpra.codecs.avif.encoder", "libavif")
 tace(avif_decoder_ENABLED, "xpra.codecs.avif.decoder", "libavif")
 toggle_packages(csc_libyuv_ENABLED, "xpra.codecs.libyuv")
-if csc_libyuv_ENABLED:
-    if libyuv_fallback:
-        # no `libyuv.pc`: link with `-lyuv` directly
-        ace("xpra.codecs.libyuv.converter", language="c++", libraries=["yuv"])
-    else:
-        ace("xpra.codecs.libyuv.converter", "libyuv", language="c++")
+tace(csc_libyuv_ENABLED, "xpra.codecs.libyuv.converter", "libyuv", language="c++")
 toggle_packages(csc_cython_ENABLED, "xpra.codecs.csc_cython")
 tace(csc_cython_ENABLED, "xpra.codecs.csc_cython.converter", optimize=3)
 toggle_packages(pytorch_ENABLED, "xpra.codecs.pytorch")
@@ -3144,8 +3118,8 @@ if wayland_server_ENABLED:
                         "/usr/share/wayland-protocols/stable/xdg-shell/xdg-shell.xml",
                         XDG_SHELL_PROTOCOL_HEADER])
     wlr_args = ["-DWLR_USE_UNSTABLE", "-I./xpra/wayland/"]
-    ace("xpra.wayland.events", "wlroots-0.19,wayland-server", extra_compile_args=wlr_args)
-    ace("xpra.wayland.display", "wlroots-0.19,wayland-server", extra_compile_args=wlr_args)
+    ace("xpra.wayland.events", "wlroots-0.19", extra_compile_args=wlr_args)
+    ace("xpra.wayland.display", "wlroots-0.19", extra_compile_args=wlr_args)
     ace("xpra.wayland.output", "wlroots-0.19,libdrm,wayland-server", extra_compile_args=wlr_args)
     ace("xpra.wayland.pointer","wlroots-0.19,wayland-server", extra_compile_args=wlr_args)
     ace("xpra.wayland.keyboard","wlroots-0.19,wayland-server", extra_compile_args=wlr_args)
