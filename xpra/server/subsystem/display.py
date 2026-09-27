@@ -423,6 +423,9 @@ class DisplayManager(StubServerMixin):
             log_screen_sizes(width, height, ss.screen_sizes)
             self.calculate_workarea(width, height)
             self.set_desktop_geometry_attributes(width, height)
+            from xpra.server.subsystem.desktop_server_events import on_client_dimensions
+
+            on_client_dimensions(width, height)
         # DPI
         dpi = 0
         dpi_caps = attrs.get("dpi")
