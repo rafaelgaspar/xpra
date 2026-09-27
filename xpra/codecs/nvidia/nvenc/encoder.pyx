@@ -23,7 +23,7 @@ from xpra.codecs.nvidia.cuda.context import (
     get_CUDA_function, record_device_failure, record_device_success,
     cuda_device_context, load_device,
 )
-from xpra.codecs.constants import VideoSpec, TransientCodecException
+from xpra.codecs.constants import VideoSpec, TransientCodecException, CSC_ALIAS
 from xpra.codecs.image import ImageWrapper
 from xpra.codecs.nvidia.util import get_nvidia_module_version, get_license_keys, get_cards
 from xpra.log import Logger
@@ -37,7 +37,6 @@ import numpy
 from libc.stdint cimport uintptr_t, int8_t, uint8_t, uint16_t, uint32_t, uint64_t   # pylint: disable=syntax-error
 from libc.stdlib cimport free, malloc
 from libc.string cimport memset, memcpy
-from cpython.ref cimport Py_INCREF
 
 from xpra.codecs.nvidia.nvenc.nvencode cimport init_nvencode_library, create_nvencode_instance, get_current_cuda_context
 
@@ -503,7 +502,8 @@ cdef class Encoder:
         no_preset[self.encoding] = monotonic()
         raise ValueError("no matching presets available for '%s' with speed=%i and quality=%i" % (self.codec_name, self.speed, self.quality))
 
-    def init_context(self, encoding: str, unsigned int width, unsigned int height, src_format: str, options: typedict) -> None:
+    def init_context(self, encoding: str, unsigned int width, unsigned int height, src_format: str,
+                     options: typedict) -> None:
         log("init_context%s", (encoding, width, height, src_format, options))
         options = options or typedict()
         cuda_device_context = options.get("cuda-device-context")
@@ -1188,40 +1188,7 @@ cdef class Encoder:
 
     def __dealloc__(self):
         if not self.closed:
-            if self.threaded_init:
-                # clean() starts threaded_clean, which retains a bound
-                # method holding self. Cython frees cdef instances after
-                # __dealloc__ returns even if that resurrects self, so the
-                # cleanup thread would dereference freed memory. We cannot
-                # clean safely here, but must also prevent Cython from
-                # decrefing PyCUDA objects without their CUDA context
-                # pushed. Intentionally leak their references instead.
-                # Callers must call clean() before dropping the last ref.
-                try:
-                    log.warn("!" * 78)
-                    log.warn("CRITICAL: nvenc Encoder %s GC'd without clean()", self)
-                    log.warn("GPU resources are being intentionally leaked to avoid a use-after-free crash")
-                    log.warn("Call Encoder.clean() before dropping the last reference")
-                    log.warn("!" * 78)
-                except Exception:
-                    pass
-                for resource in (
-                    self.cuda_device_context,
-                    self.inputBuffer,
-                    self.cudaInputBuffer,
-                    self.cudaOutputBuffer,
-                    self.kernel,
-                ):
-                    if resource is not None:
-                        Py_INCREF(resource)
-                self.cuda_device_context = None
-                self.inputBuffer = None
-                self.cudaInputBuffer = None
-                self.cudaOutputBuffer = None
-                self.kernel = None
-                self.closed = 1
-            else:
-                self.clean()
+            self.clean()
 
     def clean(self) -> None:
         f = self.file
@@ -1261,14 +1228,10 @@ cdef class Encoder:
             # pushed, pycuda emitted "X in out-of-thread context could not
             # be cleaned up" warnings and leaked the underlying pinned /
             # device memory. Accumulated pinned-memory leaks eventually
-            # SEGV in pycuda. Cleanup must wait for the lock, but a stuck
-            # CUDA/NVENC operation should remain visible in the logs.  Back
-            # off between warnings, capping the interval so a long wait is
-            # still reported regularly.
-            cleanup_lock_wait = 1
-            while not cdc.lock.acquire(timeout=cleanup_lock_wait):
-                log.warn("Warning: still waiting %is for CUDA device lock during encoder cleanup", cleanup_lock_wait)
-                cleanup_lock_wait = min(cleanup_lock_wait * 2, 60)
+            # SEGV in pycuda. compress_image always finishes in bounded
+            # time and do_clean runs on a daemon thread, so waiting is
+            # safe — strictly preferable to leaking.
+            cdc.lock.acquire()
             try:
                 if cdc.context:
                     cdc.context.push()
@@ -1620,9 +1583,13 @@ cdef class Encoder:
         #a grid is a group of blocks: (gridw * gridh) blocks
         cdef uint32_t blockw = 32
         cdef uint32_t blockh = 32
-        #cover the whole aligned output so the kernels can edge-extend the padding:
-        cdef uint32_t gridw = MAX(1, (self.encoder_width + blockw*dx - 1)//(blockw*dx))
-        cdef uint32_t gridh = MAX(1, (self.encoder_height + blockh*dy - 1)//(blockh*dy))
+        cdef uint32_t gridw = MAX(1, w//(blockw*dx))
+        cdef uint32_t gridh = MAX(1, h//(blockh*dy))
+        #if dx or dy made us round down, add one:
+        if gridw*dx*blockw<w:
+            gridw += 1
+        if gridh*dy*blockh<h:
+            gridh += 1
         cdef unsigned int in_w = self.input_width
         cdef unsigned int in_h = self.input_height
         if self.scaling:
@@ -1783,11 +1750,7 @@ cdef class Encoder:
         self.free_memory, self.total_memory = driver.mem_get_info()
 
         client_options = {
-            "csc"       : {
-                "NV12": "YUV420P",
-                "BGRX": "YUV444P",
-                "r210": "GBRP10",
-            }.get(self.pixel_format, self.pixel_format),
+            "csc"       : CSC_ALIAS.get(self.pixel_format, self.pixel_format),
             "frame"     : int(self.frames),
             "pts"       : int(timestamp-self.first_frame_timestamp),
             "full-range" : full_range,

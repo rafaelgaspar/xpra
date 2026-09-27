@@ -456,10 +456,6 @@ class WindowVideoSource(WindowSource):
                 exclude.append(x)
                 continue
             csc_modes = self.full_csc_modes.strtupleget(x)
-            if not csc_modes and init:
-                # per-window csc data has not arrived yet:
-                # do_set_client_properties() will re-run update_encoding_selection() once it does
-                continue
             if (not csc_modes or x not in self.core_encodings) and first_time(f"nocsc-{x}-{self.wid:#x}"):
                 exclude.append(x)
                 msg_args = ("Warning: client does not support any csc modes with %s on window %i", x, self.wid)
@@ -510,13 +506,8 @@ class WindowVideoSource(WindowSource):
             self.scaling_control = max(0, min(100, properties.intget("scaling.control", 0)))
         super().do_set_client_properties(properties)
         # encodings may have changed, so redo this:
-        nv_common = (
-            set(self.picture_encodings) & set(self.core_encodings) & set(self._encoders)
-        )
-        log(
-            "common non-video (%s & %s & %s)=%s",
-            self.picture_encodings, self.core_encodings, tuple(self._encoders), nv_common,
-        )
+        nv_common = set(self.picture_encodings) & set(self.core_encodings)
+        log("common non-video (%s & %s)=%s", self.picture_encodings, self.core_encodings, nv_common)
         self.non_video_encodings = preforder(nv_common)
         if not VIDEO_SKIP_EDGE:
             try:
@@ -756,16 +747,13 @@ class WindowVideoSource(WindowSource):
         self.stop_gstreamer_pipeline()
 
     def cancel_damage(self, limit: int = 0) -> None:
-        # first of all, mark the sequences as cancelled,
-        # so that the encode thread will not try to use
-        # the images we are about to free below:
-        super().cancel_damage(limit)
         self.cancel_encode_from_queue()
         self.free_encode_queue_images()
         if vsr := self.video_subregion:
             vsr.cancel_refresh_timer()
         self.free_scroll_data()
         self.last_scroll_time = 0
+        super().cancel_damage(limit)
         self.cancel_gstreamer_timer()
         self.stop_gstreamer_pipeline()
         # we must clean the video encoder to ensure
@@ -1083,8 +1071,7 @@ class WindowVideoSource(WindowSource):
                 self.wid, sequence, ew, eh, encoding, 1000*(now-damage_time), 1000*(now-rgb_request_time), av_delay)
             item = (ew, eh, damage_time, now, eimage, encoding, sequence, eoptions, flush)
             if av_delay <= 0:
-                # not optional: the encode thread now owns this image and must free it
-                self.call_in_encode_thread(False, self.make_data_packet_cb, *item)
+                self.call_in_encode_thread(True, self.make_data_packet_cb, *item)
             else:
                 self.encode_queue.append(item)
                 self.schedule_encode_from_queue(av_delay)
@@ -1146,8 +1133,6 @@ class WindowVideoSource(WindowSource):
             GLib.source_remove(eqt)
 
     def free_encode_queue_images(self) -> None:
-        # must be called from the UI thread, which is the only thread
-        # allowed to modify the encode queue - see `encode_from_queue`
         eq = self.encode_queue
         avsynclog("free_encode_queue_images() freeing %i images for wid=%#x", len(eq), self.wid)
         if not eq:
@@ -1171,15 +1156,11 @@ class WindowVideoSource(WindowSource):
     def timer_encode_from_queue(self) -> None:
         self.encode_from_queue_timer = 0
         self.encode_from_queue_due = 0
-        self.encode_from_queue()
+        self.call_in_encode_thread(True, self.encode_from_queue)
 
     def encode_from_queue(self) -> None:
         # note: we use a queue here to ensure we preserve the order
         # (so we encode frames in the same order they were grabbed)
-        # this runs in the UI thread: it is the only thread allowed to modify the queue,
-        # so that the ownership of each image is never ambiguous.
-        # the items we pick are handed over to the encode thread,
-        # which then owns them and frees them - see `make_data_packet_cb`
         eq = self.encode_queue
         avsynclog("encode_from_queue: %s items for wid=%#x", len(eq), self.wid)
         if not eq:
@@ -1196,28 +1177,35 @@ class WindowVideoSource(WindowSource):
         now = monotonic()
         still_due = []
         remove = []
+        index = 0
+        item = None
+        sequence = None
         done_packet = False     # only one packet per iteration
-        for index, item in enumerate(eq):
-            # item = (w, h, damage_time, now, image, coding, sequence, options, flush)
-            sequence = item[6]
-            if self.is_cancelled(sequence):
-                free_image_wrapper(item[4])
-                remove.append(index)
-                continue
-            ts = item[3]
-            due = ts + av_delay
-            if due <= now and not done_packet:
-                # found an item which is due
-                remove.append(index)
-                avsynclog("encode_from_queue: processing item %s/%s (overdue by %ims)",
-                          index+1, len(self.encode_queue), int(1000*(now-due)))
-                # not optional: the encode thread now owns this image and must free it
-                self.call_in_encode_thread(False, self.make_data_packet_cb, *item)
-                done_packet = True
-            else:
-                # we only process one item per call (see "done_packet")
-                # and just keep track of extra ones:
-                still_due.append(int(1000*(due-now)))
+        try:
+            for index, item in enumerate(eq):
+                # item = (w, h, damage_time, now, image, coding, sequence, options, flush)
+                sequence = item[6]
+                if self.is_cancelled(sequence):
+                    free_image_wrapper(item[4])
+                    remove.append(index)
+                    continue
+                ts = item[3]
+                due = ts + av_delay
+                if due <= now and not done_packet:
+                    # found an item which is due
+                    remove.append(index)
+                    avsynclog("encode_from_queue: processing item %s/%s (overdue by %ims)",
+                              index+1, len(self.encode_queue), int(1000*(now-due)))
+                    self.make_data_packet_cb(*item)
+                    done_packet = True
+                else:
+                    # we only process one item per call (see "done_packet")
+                    # and just keep track of extra ones:
+                    still_due.append(int(1000*(due-now)))
+        except RuntimeError:
+            if not self.is_cancelled(sequence):
+                avsynclog.error("error processing encode queue at index %i", index)
+                avsynclog.error("item=%s", item, exc_info=True)
         # remove the items we've dealt with:
         # (in reverse order since we pop them from the queue)
         if remove:
@@ -1230,7 +1218,7 @@ class WindowVideoSource(WindowSource):
         first_due = max(ENCODE_QUEUE_MIN_GAP, min(still_due))
         avsynclog("encode_from_queue: first due in %ims, due list=%s (av-sync delay=%i, actual=%i, for wid=%#x)",
                   first_due, still_due, self.av_sync_delay, av_delay, self.wid)
-        self.schedule_encode_from_queue(first_due)
+        GLib.idle_add(self.schedule_encode_from_queue, first_due)
 
     def update_encoding_video_subregion(self) -> None:
         """
@@ -1547,8 +1535,7 @@ class WindowVideoSource(WindowSource):
                     max_w = min(encoder_spec.max_w, vmw)
                     max_h = min(encoder_spec.max_h, vmh)
                     if (csc_spec and csc_spec.can_scale) or encoder_spec.can_scale:
-                        within_encoder_limits = width <= max_w and height <= max_h
-                        if within_encoder_limits and cached_scaling[0] >= width and cached_scaling[1] >= height:
+                        if cached_scaling[0] >= width and cached_scaling[1] >= height:
                             scaling = cached_scaling[2]
                         else:
                             scaling = self.calculate_scaling(width, height, max_w, max_h)
@@ -2049,6 +2036,7 @@ class WindowVideoSource(WindowSource):
             if encoder_scaling != (1, 1) and not encoder_spec.can_scale:
                 videolog("scaling is now enabled, so skipping %s", encoder_spec)
                 return False
+        self._csc_encoder = csce
         enc_start = monotonic()
         # FIXME: filter dst_formats to only contain formats the encoder knows about?
         dst_formats = self.full_csc_modes.strtupleget(encoding)
@@ -2075,10 +2063,6 @@ class WindowVideoSource(WindowSource):
         self.max_h = max_h
         enc_end = monotonic()
         self.start_video_frame = 0
-        # publish both together, back-to-back, to narrow the window during which
-        # video_context_clean() (running on another thread) could observe a
-        # half-updated pair and end up clearing only one of the two:
-        self._csc_encoder = csce
         self._video_encoder = ve
         videolog("setup_pipeline: csc=%s, video encoder=%s, info: %s, setup took %.2fms",
                  csce, ve, ve.get_info(), (enc_end - enc_start) * 1000)
@@ -2673,7 +2657,7 @@ class WindowVideoSource(WindowSource):
         options = typedict()
         packet = self.make_draw_packet(x, y, w, h, encoding, Compressed(encoding, data), 0,
                                        client_options, options)
-        self.queue_damage_packet(packet, now, now, options)
+        self.queue_damage_packet(packet, now, now)
         # check for more delayed frames since we want to support multiple b-frames:
         if not self.b_frame_flush_timer and client_options.get("delayed", 0) > 0:
             self.schedule_video_encoder_flush(ve, csc, frame, x, y, scaled_size)

@@ -21,7 +21,7 @@ from xpra.x11.xkbhelper import (
     do_set_keymap, set_all_keycodes, set_keycode_translation,
     get_modifiers_from_meanings, get_modifiers_from_keycodes,
     clear_modifiers, set_modifiers, map_missing_modifiers,
-    clean_keyboard_state, get_keycode_mappings, get_keyval_mappings, canonical_keysym,
+    clean_keyboard_state, get_keycode_mappings, get_keyval_mappings,
     DEBUG_KEYSYMS, grok_modifier_map,
 )
 from xpra.x11.bindings.keyboard import X11KeyboardBindings
@@ -536,26 +536,6 @@ class KeyboardConfig(KeyboardConfigBase):
     def update_keyval_mappings(self) -> None:
         self.keyval_mappings = get_keyval_mappings()
 
-    def keys_changed(self) -> None:
-        """
-        The X11 keymap has changed underneath us:
-        `setxkbmap` or `xmodmap` was run inside the session, an ibus engine switched layout, etc.
-        Every lookup table we derived from the keymap is now stale, so re-derive them.
-        This must not modify the keymap itself - we are reacting to someone else's change.
-        """
-        if not self.enabled:
-            return
-        with xlog:
-            self.update_keycode_mappings()
-            self.update_keyval_mappings()
-            # keysyms may have moved to a different keycode, or appeared:
-            self.map_all_keynames()
-            self.add_loose_matches()
-            self.compute_modifier_map()
-            self.compute_modifier_keynames()
-        log("keys_changed() %i keycodes, %i keycode translation entries",
-            len(self.keycode_mappings), len(self.keycode_translation))
-
     def do_get_keycode(self, client_keycode: int, keyname: str, pressed: bool, modifiers: list[str], keyval: int,
                        keystr: str, group: int) -> tuple[int, int]:
         if not self.enabled:
@@ -568,24 +548,9 @@ class KeyboardConfig(KeyboardConfigBase):
         log("do_get_keycode has x11: %s, client_keycode=%s", bool(self.x11_keycodes), client_keycode)
         if self.x11_keycodes and client_keycode > 0:
             keycode = self.keycode_translation.get((client_keycode, keyname), 0) or client_keycode
-            keysyms = self.keycode_mappings.get(keycode, ())
-            canonical = canonical_keysym(keyname)
-            if keyname in keysyms or canonical in keysyms:
-                kmlog(keyname, "do_get_keycode (%i, %s)=%s (native keymap)", client_keycode, keyname, keycode)
-                return keycode, group
-            kmlog(keyname,
-                  "native keycode %i resolved to %i with keysyms=%s; matching by keysym instead",
-                  client_keycode, keycode, keysyms)
-            return self.find_matching_keycode(client_keycode, canonical, pressed, modifiers, keyval, keystr, group)
-        keycode, rgroup = self.find_matching_keycode(client_keycode, keyname, pressed, modifiers, keyval, keystr, group)
-        if keycode < 0 and keyname:
-            # the client may know this keysym by another name - ie: `Page_Up` for `Prior`:
-            canonical = canonical_keysym(keyname)
-            if canonical != keyname:
-                kmlog(keyname, "do_get_keycode: trying canonical keysym name %r", canonical)
-                keycode, rgroup = self.find_matching_keycode(client_keycode, canonical,
-                                                             pressed, modifiers, keyval, keystr, group)
-        return keycode, rgroup
+            kmlog(keyname, "do_get_keycode (%i, %s)=%s (native keymap)", client_keycode, keyname, keycode)
+            return keycode, group
+        return self.find_matching_keycode(client_keycode, keyname, pressed, modifiers, keyval, keystr, group)
 
     def find_matching_keycode(self, client_keycode: int, keyname: str,
                               pressed: bool, modifiers: list[str], keyval: int, keystr: str, group: int) -> tuple[int, int]:
@@ -643,28 +608,6 @@ class KeyboardConfig(KeyboardConfigBase):
                 kml(f"adding {mod} to modifiers")
                 modifiers.append(mod)
 
-        def apply_level(sublevel: int) -> None:
-            # toggle the modifiers needed to reach this level within its group:
-            # keypad overrules shift state (see #2702):
-            if keyname.startswith("KP_"):
-                if numlock_modifier and not numlock:
-                    toggle_modifier(numlock_modifier)
-            elif (sublevel & 1) ^ shift:
-                # shift state does not match
-                toggle_modifier("shift")
-            if int(bool(sublevel & 2)) ^ mode:
-                # try to set / unset mode:
-                for mod, keynames in self.keynames_for_mod.items():
-                    if "ISO_Level3_Shift" in keynames or "Mode_switch" in keynames:
-                        # found mode switch modified
-                        toggle_modifier(mod)
-                        break
-
-        def level_cost(sublevel: int) -> int:
-            # how far this level is from the modifier state we already have:
-            # `mode` is harder to toggle than `shift` - see `get_levels`
-            return int(bool(sublevel & 1) != shift) + 2 * int(bool(sublevel & 2) != mode)
-
         levels = get_levels(bool(mode), shift, bool(group))
         level0 = levels[0]
         kml("will try levels: %s", levels)
@@ -682,7 +625,20 @@ class KeyboardConfig(KeyboardConfigBase):
                 kml("not toggling any modifiers state for keysyms=%s", keysyms)
                 break
 
-            apply_level(level % 4)
+            # keypad overrules shift state (see #2702):
+            if keyname.startswith("KP_"):
+                if numlock_modifier and not numlock:
+                    toggle_modifier(numlock_modifier)
+            elif (level & 1) ^ shift:
+                # shift state does not match
+                toggle_modifier("shift")
+            if int(bool(level & 2)) ^ mode:
+                # try to set / unset mode:
+                for mod, keynames in self.keynames_for_mod.items():
+                    if "ISO_Level3_Shift" in keynames or "Mode_switch" in keynames:
+                        # found mode switch modified
+                        toggle_modifier(mod)
+                        break
             rgroup = level // 4
             if rgroup != group:
                 kml("switching group from %i to %i", group, rgroup)
@@ -709,24 +665,15 @@ class KeyboardConfig(KeyboardConfigBase):
             if group_mapping := self.keyval_mappings.get(keyval, {}):
                 # this keyval was found!
                 # try to preserve the group:
-                entries = group_mapping.get(group, ())
-                if not entries:
-                    # this keysym is not available in the client's group,
-                    # use the lowest group that does have it:
-                    # (the keycode is usually the same in every group,
-                    # so what we are really choosing here is the group to switch to)
-                    for kgroup in sorted(group_mapping):
-                        if group_mapping[kgroup]:
-                            entries = group_mapping[kgroup]
-                            rgroup = kgroup
-                            break
-                if entries:
-                    # of the keys which can produce this keysym in this group,
-                    # use the one needing the fewest modifier changes:
-                    keycode, sublevel = min(entries, key=lambda entry: level_cost(entry[1]))
-                    kml("keyval %#x found at level %i of keycode %i in group %i",
-                        keyval, sublevel, keycode, rgroup)
-                    apply_level(sublevel)
+                keycodes = group_mapping.get(keyval, [])
+                if keycodes:
+                    keycode = keycodes[0]
+                else:
+                    # try other groups:
+                    for group, keycodes in group_mapping.items():
+                        if keycodes:
+                            keycode = keycodes[0]
+                            rgroup = group
         return keycode, rgroup
 
     def get_current_mask(self) -> list[str]:

@@ -171,17 +171,16 @@ def make_cursor(cursor_data: Sequence, xscale=1.0, yscale=1.0) -> Gdk.Cursor | N
         sy = round(y * yscale)
         sw = max(1, sw)
         sh = max(1, sh)
-        # ensure we honour the max size if there is one,
-        # shrinking both axes by the same ratio so the cursor keeps its shape and hotspot:
+        # ensure we honour the max size if there is one:
         if 0 < cmaxw < sw or 0 < cmaxh < sh:
             ratio = 1.0
             if cmaxw > 0:
-                ratio = max(ratio, sw / cmaxw)
+                ratio = max(ratio, w / cmaxw)
             if cmaxh > 0:
-                ratio = max(ratio, sh / cmaxh)
+                ratio = max(ratio, h / cmaxh)
             cursorlog("clamping cursor size to %ix%i using ratio=%s", cmaxw, cmaxh, ratio)
             sx, sy = round(sx / ratio), round(sy / ratio)
-            sw, sh = max(1, round(sw / ratio)), max(1, round(sh / ratio))
+            sw, sh = min(cmaxw, round(sw / ratio)), min(cmaxh, round(sh / ratio))
 
         cursorlog("scaling cursor to %ix%i for desktop-scale %s/%s", sw, sh, xscale, yscale)
         pixbuf = pixbuf.scale_simple(sw, sh, GdkPixbuf.InterpType.BILINEAR)
@@ -646,7 +645,7 @@ class GTKXpraClient(GObjectClientAdapter, UIXpraClient):
                                    message_type=Gtk.MessageType.INFO, buttons=Gtk.ButtonsType.CLOSE,
                                    text="\n".join(msgs))
         try:
-            image = Gtk.Image.new_from_icon_name("dialog-warning", Gtk.IconSize.BUTTON)
+            image = Gtk.Image.new_from_icon_name(Gtk.STOCK_DIALOG_WARNING, Gtk.IconSize.BUTTON)
             dialog.set_image(image)
         except Exception as e:
             log.warn(f"Warning: failed to set dialog image: {e}")
@@ -945,9 +944,7 @@ class GTKXpraClient(GObjectClientAdapter, UIXpraClient):
 
     def make_hello(self) -> dict[str, Any]:
         capabilities = UIXpraClient.make_hello(self)
-        from xpra.client.base import features
-        if features.encoding:
-            capabilities["encoding.transparency"] = self.has_transparency()
+        capabilities["encoding.transparency"] = self.has_transparency()
         if FULL_INFO > 1:
             capabilities.setdefault("versions", {}).update(get_gtk_version_info())
         EXPORT_ICON_DATA = envbool("XPRA_EXPORT_ICON_DATA", FULL_INFO > 1)
@@ -972,38 +969,36 @@ class GTKXpraClient(GObjectClientAdapter, UIXpraClient):
                     icons += it.list_icons(context)
                 log(f"icons: {icons}")
                 capabilities["theme.default.icons"] = tuple(set(icons))
-        if features.window:
-            if METADATA_SUPPORTED:
-                ms = [x.strip() for x in METADATA_SUPPORTED.split(",")]
-            else:
-                # this is currently unused, and slightly redundant because of metadata.supported below:
-                capabilities["window.states"] = [
-                    "fullscreen", "maximized",
-                    "sticky", "above", "below",
-                    "shaded", "iconified",
-                    "skip-taskbar", "skip-pager",
-                ]
-                ms = list(DEFAULT_METADATA_SUPPORTED)
-                # 4.4:
-                ms += ["parent", "relative-position", "override-redirect"]
-            if POSIX:
-                # this is only really supported on X11, but posix is easier to check for..
-                # "strut" and maybe even "fullscreen-monitors" could also be supported on other platforms I guess
-                ms += ["shaded", "bypass-compositor", "strut", "fullscreen-monitors", "locale"]
-            if HAS_X11_BINDINGS:
-                ms += ["x11-property", "focused"]
-                XSHAPE = envbool("XPRA_XSHAPE", True)
-                if XSHAPE:
-                    ms += ["shape"]
-            log("metadata.supported: %s", ms)
-            capabilities["metadata.supported"] = ms
-            capabilities.setdefault("window", {})["frame_sizes"] = self.get_window_frame_sizes()
-        if features.encoding:
-            capabilities.setdefault("encoding", {})["icons"] = {
-                "greedy": True,  # we don't set a default window icon anymore
-                "size": (64, 64),  # size we want
-                "max_size": (128, 128),  # limit
-            }
+        if METADATA_SUPPORTED:
+            ms = [x.strip() for x in METADATA_SUPPORTED.split(",")]
+        else:
+            # this is currently unused, and slightly redundant because of metadata.supported below:
+            capabilities["window.states"] = [
+                "fullscreen", "maximized",
+                "sticky", "above", "below",
+                "shaded", "iconified",
+                "skip-taskbar", "skip-pager",
+            ]
+            ms = list(DEFAULT_METADATA_SUPPORTED)
+            # 4.4:
+            ms += ["parent", "relative-position", "override-redirect"]
+        if POSIX:
+            # this is only really supported on X11, but posix is easier to check for..
+            # "strut" and maybe even "fullscreen-monitors" could also be supported on other platforms I guess
+            ms += ["shaded", "bypass-compositor", "strut", "fullscreen-monitors", "locale"]
+        if HAS_X11_BINDINGS:
+            ms += ["x11-property", "focused"]
+            XSHAPE = envbool("XPRA_XSHAPE", True)
+            if XSHAPE:
+                ms += ["shape"]
+        log("metadata.supported: %s", ms)
+        capabilities["metadata.supported"] = ms
+        capabilities.setdefault("window", {})["frame_sizes"] = self.get_window_frame_sizes()
+        capabilities.setdefault("encoding", {})["icons"] = {
+            "greedy": True,  # we don't set a default window icon anymore
+            "size": (64, 64),  # size we want
+            "max_size": (128, 128),  # limit
+        }
         return capabilities
 
     def has_transparency(self) -> bool:

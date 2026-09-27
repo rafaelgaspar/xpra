@@ -72,10 +72,7 @@ def close_display_source(uintptr_t ptr) -> int:
     assert ptr!=0, "invalid NULL display pointer"
     cdef Display * display = <Display *> ptr
     set_display(NULL)
-    # clear the name rather than leave a placeholder behind:
-    # `init_display_source` would then try to open a display by that name,
-    # and callers use `get_display_name() or ...` to fall back to `DISPLAY`
-    set_display_name("")
+    set_display_name("CLOSED")
     cdef int v = XCloseDisplay(display)
     return v
 
@@ -88,12 +85,9 @@ class X11DisplayContext:
         a temporary display source will be used.
     """
 
-    def __init__(self, display_name: str = ""):
+    def __init__(self, display_name=os.environ.get("DISPLAY", "")):
         self.close = False
-        # `DISPLAY` must be looked up here and not in the signature:
-        # a default argument value is evaluated once, when this module is imported,
-        # which is not necessarily the display we are running against by then
-        self.display_name = display_name or os.environ.get("DISPLAY", "")
+        self.display_name = display_name
         self.display = 0
         self.saved_display = 0
 

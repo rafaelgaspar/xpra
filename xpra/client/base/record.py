@@ -7,7 +7,7 @@ import json
 import os.path
 from time import monotonic, time
 from typing import Any
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 
 from xpra.client.base.gobject import GObjectClientAdapter
 from xpra.exit_codes import ExitValue
@@ -52,15 +52,10 @@ def can_focus(metadata: typedict) -> bool:
 
 
 def save_json(path: str, data: dict) -> None:
-    def tostr(obj) -> str:
-        # this should not happen: binary data is saved as separate blob files,
-        # but a lossy event is still better than a hole in the event sequence:
-        log.warn("Warning: cannot serialize %s value, saving it as a string", type(obj))
-        return str(obj)
     try:
-        text = json.dumps(data, default=tostr)
-    except (TypeError, ValueError):
-        log.error("Error writing %r to %r", data, path, exc_info=True)
+        text = json.dumps(data)
+    except TypeError:
+        log.error("Error writing %r to %r", data, path)
         return
     with open(path, "w") as f:
         f.write(text)
@@ -111,27 +106,6 @@ class WindowModel:
     def update_metadata(self, metadata) -> None:
         self.metadata.update(metadata)
 
-    def extract_blobs(self, data: Mapping) -> dict:
-        """
-        json cannot store binary data, so it is saved as a separate file
-        named after the event and the key it was found in
-        (ie: `encoding` in `draw` packets or `pixels` in `cursor_data` packets).
-        `sync` events embed the cursor data, so nested dictionaries are
-        parsed too - and since those dictionaries are shared with the other
-        windows, a copy is returned rather than modifying them in place.
-        """
-        filtered: dict[str, Any] = {}
-        for key, value in data.items():
-            if isinstance(value, (bytes, memoryview)):
-                path = os.path.join(self.directory, f"{self.event_no}.{key}")
-                with open(path, "wb") as f:
-                    f.write(bytes(value))
-            elif isinstance(value, Mapping):
-                filtered[key] = self.extract_blobs(value)
-            else:
-                filtered[key] = value
-        return filtered
-
     def record(self, event: str, **kwargs) -> None:
         data = {
             "event": event,
@@ -140,9 +114,16 @@ class WindowModel:
             "time": int(time() * 1000),
             "index": self.event_no,
         }
-        # binary data is stored in separate files,
+        # remove bytes data and store as a separate file
+        # (ie: `encoding` in `draw` packets or `pixels` in `cursor_data` packets)
+        for key, value in dict(kwargs).items():
+            if isinstance(value, (bytes, memoryview)):
+                bin_data = bytes(kwargs.pop(key, b""))
+                path = os.path.join(self.directory, f"{self.event_no}.{key}")
+                with open(path, "wb") as f:
+                    f.write(bin_data)
         # everything else is added to the dictionary:
-        data.update(self.extract_blobs(kwargs))
+        data.update(kwargs)
         path = os.path.join(self.directory, f"{self.event_no}.json")
         save_json(path, data)
         log("recorded: %s : %r", event, data)
@@ -233,9 +214,8 @@ class RecordClient(GObjectClientAdapter, ClientBaseClass):
     def make_hello(self) -> dict[str, Any]:
         caps: dict[str, Any] = {}
         if self.windows:
-            window_caps = {"enabled": True, "record": True, "restack": True}
             caps = {
-                "window": window_caps,
+                "windows": {"record": True, "restack": True},
                 "encoding": self.encoding_options,
                 "share": True,
                 "keyboard": {"record": True},
@@ -244,9 +224,6 @@ class RecordClient(GObjectClientAdapter, ClientBaseClass):
                 "clipboard": {"record": True},
                 "display": {"record": True},
             }
-            if BACKWARDS_COMPATIBLE:
-                # older servers read these from the plural namespace:
-                caps["windows"] = window_caps
         return caps
 
     def server_connection_established(self, caps: typedict) -> bool:
@@ -281,18 +258,10 @@ class RecordClient(GObjectClientAdapter, ClientBaseClass):
         self.refresh_needed = set()
         return True
 
-    def _process_encoding_set(self, packet: Packet) -> None:
+    def _process_encodings(self, packet: Packet) -> None:
         encodings = typedict(packet.get_dict(1)).dictget("encodings", {}).get("core", ())
         common = tuple(set(self.encodings) & set(encodings))
         log("server encodings=%s, common=%s", encodings, common)
-
-    def _process_setting_change(self, packet: Packet) -> None:
-        """ we don't have any settings to update, just log it """
-        log("setting-change: %s=%s", packet.get_str(1), packet[2])
-
-    def _process_desktop_size(self, packet: Packet) -> None:
-        """ the recorder has no screen to resize, just log it """
-        log("desktop-size: %s", packet[1:])
 
     def get_window(self, wid: int) -> WindowModel | None:
         return self._id_to_window.get(wid)
@@ -588,9 +557,7 @@ class RecordClient(GObjectClientAdapter, ClientBaseClass):
         window.record("pointer-wheel", position=pointer, button=button, distance=distance, modifiers=tuple(modifiers))
 
     def init_authenticated_packet_handlers(self) -> None:
-        super().init_authenticated_packet_handlers()
-        self.add_packets("startup-complete", "encoding-set", main_thread=True)
-        self.add_legacy_alias("encodings", "encoding-set")
+        self.add_packets("startup-complete", "encodings", main_thread=True)
         if BACKWARDS_COMPATIBLE:
             self.add_packets("new-override-redirect")
             self.add_legacy_alias("raise-window", "window-raise")
@@ -602,6 +569,7 @@ class RecordClient(GObjectClientAdapter, ClientBaseClass):
             self.add_legacy_alias("draw", "window-draw")
             self.add_legacy_alias("bell", "window-bell")
         self.add_packets(
+            "startup-complete",
             "window-create",
             "window-raise",
             "window-restack",
@@ -621,7 +589,4 @@ class RecordClient(GObjectClientAdapter, ClientBaseClass):
             "pointer-motion",
             "pointer-wheel",
             "clipboard-record",
-            # nothing to record, but we must not close the connection on them:
-            "setting-change",
-            "desktop_size",
         )

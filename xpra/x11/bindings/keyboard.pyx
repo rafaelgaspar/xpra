@@ -500,11 +500,9 @@ cdef class X11KeyboardBindingsInstance(X11CoreBindingsInstance):
         XkbFreeKeyboard(xkb, 0, 1)
         return keysyms
 
-    def get_xkb_keysym_mappings(self) -> Dict[int, Dict[int, Sequence[Tuple[int, int]]]]:
+    def get_xkb_keysym_mappings(self) -> Dict[int, Dict[int, Sequence[int]]]:
         # returns a map with the keyval as key,
-        # and a map as value: (group, list of (keycode, level) pairs)
-        # the level is relative to the group, so it only carries
-        # the `shift` and `mode` bits - see `get_levels`
+        # and a map as value: (group, list of keycodes)
         self.context_check("get_xkb_keysym_mappings")
         if not self.hasXkb():
             return {}
@@ -515,7 +513,7 @@ cdef class X11KeyboardBindingsInstance(X11CoreBindingsInstance):
         cdef KeySym sym
         cdef unsigned char width
         cdef XkbSymMapRec *sym_map
-        keysyms: Dict[int, Dict[int, Sequence[Tuple[int, int]]]] = {}
+        keysyms: Dict[int, Dict[int, Sequence[int]]] = {}
         for keycode in range(xkb.min_key_code, xkb.max_key_code):
             sym_map = &xkb.map.key_sym_map[keycode]
             width = sym_map.width
@@ -525,12 +523,9 @@ cdef class X11KeyboardBindingsInstance(X11CoreBindingsInstance):
                 offset = sym_map.offset + width * group
                 for i in range(width):
                     keysym = xkb.map.syms[offset + i]
-                    if keysym == NoSymbol:
-                        continue
-                    entries = keysyms.setdefault(keysym, {}).setdefault(group, [])
-                    entry = (keycode, i)
-                    if entry not in entries:
-                        entries.append(entry)
+                    keycodes = keysyms.setdefault(keysym, {}).setdefault(group, [])
+                    if keycode not in keycodes:
+                        keycodes.append(keycode)
         XkbFreeKeyboard(xkb, 0, 1)
         return keysyms
 
@@ -626,7 +621,7 @@ cdef class X11KeyboardBindingsInstance(X11CoreBindingsInstance):
                 else:
                     keysyms = []
                     for ks in keysyms_strs:
-                        if ks is None or ks == "":
+                        if ks in (None, ""):
                             keysym = NoSymbol
                         elif isinstance(ks, int):
                             keysym = ks

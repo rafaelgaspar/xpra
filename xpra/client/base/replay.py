@@ -88,7 +88,7 @@ def may_load_blob(event: dict, ext="", warn=True) -> bytes:
     blob_path = os.path.splitext(filename)[0] + f".{ext}"
     if not os.path.exists(blob_path):
         fn = log.warn if warn else log
-        fn("Warning: %s blob %r not found!", event.strget("event") or ext, blob_path)
+        fn("Warning: %s blob %r not found!", event.strget("event"), blob_path)
         return b""
     return load_binary_file(blob_path)
 
@@ -133,20 +133,14 @@ class WindowReplay:
         self.events: dict[int, dict] = {}
         self.group_index = 0
         self.event_index = 0
-        # the highest event index found, events are not always contiguous
-        self.last_index = -1
         self.cursor: tuple[str, int ,int, int, int, int, int, int, bytes, str] | tuple = ()
         self.sync_index: Sequence[tuple[int, int]] = []
         self.all_timestamps: Sequence[int] = []
         self.window = None
 
     def load(self):
-        self.set_events(load_events_placeholders(self.directory))
+        self.events: dict[int, dict] = load_events_placeholders(self.directory)
         self.ensure_sync_index()
-
-    def set_events(self, events: dict[int, dict]) -> None:
-        self.events = events
-        self.last_index = max(events.keys(), default=-1)
 
     def ensure_sync_index(self) -> None:
         """
@@ -176,37 +170,32 @@ class WindowReplay:
         return tuple(set(ts for ts, _ in self.sync_index))
 
     def get_event(self) -> dict:
-        """
-        The event at the current index.
-        Recordings can have gaps in them, so skip over any missing index.
-        """
-        while self.event_index <= self.last_index:
-            event = self.events.get(self.event_index)
-            if event is not None:
-                may_load(event)
-                return event
-            log("event %i is missing from %r", self.event_index, self.directory)
-            self.event_index += 1
-        return {}
+        if self.event_index >= len(self.events):
+            return {}
+        event = self.events[self.event_index]
+        may_load(event)
+        return event
 
     def count(self) -> int:
         return len(self.events)
 
     def first_event(self) -> dict:
-        return self.load_event(min(self.events.keys(), default=-1))
+        event = self.events[0]
+        may_load(event)
+        return event
 
     def last_event(self) -> dict:
-        return self.load_event(max(self.events.keys(), default=-1))
-
-    def load_event(self, index: int) -> dict:
-        event = self.events.get(index, {})
-        if event:
-            may_load(event)
+        last_id: int = max(self.events.keys())
+        event = self.events.get(last_id, {})
+        may_load(event)
         return event
 
     def next_event(self) -> dict:
-        if self.event_index <= self.last_index:
+        if self.event_index < len(self.events):
             self.event_index += 1
+            while self.event_index not in self.events and self.event_index < len(self.events):
+                log.warn("Warning: event %i missing!", self.event_index)
+                self.event_index += 1
         return self.get_event()
 
     def event_info(self, etype: str, msg: str):
@@ -224,11 +213,7 @@ class WindowReplay:
     def do_process_event(self, event: typedict) -> None:
         etype = event.strget("event", "")
         log("%-8i wid=%6x - %4i : %s", event.get("timestamp", 0), self.wid, event.get("index", 0), etype)
-        if etype == "stacking":
-            # the stacking order is session wide, it doesn't need a window:
-            self.client.set_stacking(event.inttupleget("stacking"))
-            return
-        if not self.window and etype not in ("new", "sync"):
+        if not self.window and etype != "new":
             log.warn("Warning: event %r received, but window %#x is gone!", etype, self.wid)
             return
 
@@ -244,7 +229,6 @@ class WindowReplay:
                 self.window = self.client.make_client_window(self.wid, geom, metadata)
             log("new-window: %s", self.window)
             self.window.show()
-            self.may_stack(event)
             self.may_focus(event)
         elif etype == "destroy":
             self.window.destroy()
@@ -296,35 +280,12 @@ class WindowReplay:
             log("sync point")
             geometry = event.inttupleget("geometry", (0, 0, 1, 1))
             metadata = typedict(event.dictget("metadata", {}))
-            if not self.window:
-                # a seek can land on a sync point without ever replaying the `new` event
-                # which created the window - but a sync point is a complete snapshot,
-                # so we can create the window from it:
-                log("creating window %#x from a sync point", self.wid)
-                self.window = self.client.make_client_window(self.wid, geometry, metadata)
-                self.window.show()
-            cursor = event.get("cursor-data")
-            if isinstance(cursor, dict) and cursor:
-                cursor_data = typedict(cursor)
-                # the cursor pixels are saved as a blob belonging to this event:
-                cursor_data.setdefault("filename", event.get("filename", ""))
-                self.window.set_cursor_data(to_cursor_data(cursor_data))
-            else:
-                self.window.set_cursor_data(())
+            cursor = event.dictget("cursor-data", {})
+            if cursor:
+                self.window.set_cursor_data(to_cursor_data(typedict(cursor)))
             self.window.update_metadata(metadata)
             self.window.move_resize(*geometry)
-            self.may_stack(event)
             self.may_focus(event)
-        elif etype == "raise":
-            # the server only raises windows that gained the focus:
-            self.client.set_focused(self.wid, event.intget("timestamp", 0))
-        elif etype == "restack":
-            above = int(event.intget("detail", 0) == 0)
-            other_window = self.client.get_window(event.intget("other", 0))
-            log("restack: %s %s", ("below", "above")[above], other_window)
-            self.window.restack(other_window, above)
-        elif etype == "bell":
-            event_info("bell")
         elif etype == "metadata":
             metadata = typedict(event.dictget("metadata", {}))
             log("metadata: %s", metadata)
@@ -342,14 +303,6 @@ class WindowReplay:
         else:
             log.warn("%r not handled yet!", etype)
 
-    def may_stack(self, event: typedict) -> None:
-        """
-        `new` and `sync` events carry the session-wide stacking order.
-        """
-        stacking = event.inttupleget("stacking", ())
-        if stacking:
-            self.client.set_stacking(stacking)
-
     def may_focus(self, event: typedict) -> None:
         """
         `new` and `sync` events carry the focus state of the window.
@@ -359,12 +312,8 @@ class WindowReplay:
         if event.boolget("focused"):
             self.client.set_focused(self.wid, event.intget("timestamp", 0))
 
-    def find_sync_index(self, target_ts: int) -> int:
-        """
-        The index of the last sync point at or before `target_ts`,
-        or -1 if the window did not exist yet.
-        """
-        sync_idx: int = -1
+    def find_sync_index(self, target_ts: int):
+        sync_idx: int = 0
         for ts, idx in self.sync_index:
             if ts <= target_ts:
                 sync_idx = idx
@@ -374,19 +323,18 @@ class WindowReplay:
 
     def seek(self, target_ms: int) -> None:
         sync_idx = self.find_sync_index(target_ms)
-        if sync_idx < 0:
-            # no sync point at or before the target: the window did not exist yet
-            if self.wid > 0 and self.window:
-                self.window.destroy()
-                self.window = None
-            sync_idx = 0
         # start at previous sync point:
         self.event_index = sync_idx
+        if self.wid > 0 and sync_idx == 0 and self.window:
+            # window did not exist yet!
+            self.window.destroy()
+            self.window = None
         # fast-replay any events between the sync point and target_ms
-        while True:
-            ev = self.get_event()
+        while self.event_index < len(self.events):
+            ev = self.events.get(self.event_index)
             if not ev:
                 break
+            may_load(ev)
             if typedict(ev).intget("timestamp", 0) > target_ms:
                 break
             self.process_event()
@@ -397,11 +345,10 @@ class WindowModel:
     This fake window class doesn't do anything with the requests.
     """
 
-    def __init__(self, wid: int, *_args):
+    def __init__(self, wid: int, *args):
         self.wid = wid
         self.show = self.draw_region = self.set_cursor_data = self.show_pointer_overlay = noop
         self.resize = self.move_resize = self.update_metadata = self.present = noop
-        self.destroy = self.restack = noop
 
 
 def log_notable_event(etype: str, msg: str) -> None:
@@ -439,25 +386,6 @@ class Replay(GObjectClientAdapter):
     def make_client_window(self, wid: int, geometry: tuple[int, int, int, int], metadata: typedict):
         return WindowModel(wid)
 
-    def get_window(self, wid: int):
-        wr = self.window_replay.get(wid)
-        return wr.window if wr else None
-
-    def set_stacking(self, stacking: Sequence[int]) -> None:
-        """
-        Restore the recorded bottom-to-top window order.
-        Windows that are not on screen (yet, or any more) are skipped.
-        """
-        log("set_stacking(%s)", stacking)
-        below = None
-        for wid in stacking:
-            window = self.get_window(wid)
-            if not window:
-                continue
-            if below:
-                window.restack(below, 1)
-            below = window
-
     def set_focused(self, wid: int, timestamp: int = 0) -> None:
         """
         For now, we don't replay the focus itself:
@@ -469,7 +397,8 @@ class Replay(GObjectClientAdapter):
             return
         self.focus_timestamp = timestamp
         self.focused = wid
-        window = self.get_window(wid)
+        wr = self.window_replay.get(wid)
+        window = wr.window if wr else None
         log("set_focused(%#x, %i) window=%s", wid, timestamp, window)
         if window:
             window.present()

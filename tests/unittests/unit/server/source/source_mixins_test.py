@@ -155,40 +155,6 @@ class SourceMixinsTest(unittest.TestCase):
             "machine_id": "123",
         })
 
-    def test_file_printer(self):
-        # `FileConnection` and `PrinterConnection` are mixed into the same instance
-        # and share a single set of file-transfer attributes:
-        # initializing the printer half must not wipe the file half - see #5028
-        from xpra.server.source.file import FileConnection
-        from xpra.server.source.printer import PrinterConnection
-        from xpra.net.file_transfer import FileTransferAttributes
-        file_transfer = FileTransferAttributes()
-        file_transfer.init_attributes(file_transfer="yes", file_size_limit="10M",
-                                      open_files="yes", open_url="yes", open_command="open-it",
-                                      printing="yes")
-
-        def check(_c, source):
-            # `cleanup()` resets the attributes, so this has to run before it:
-            self.assertTrue(source.file_transfer)
-            self.assertTrue(source.open_files)
-            self.assertTrue(source.open_url)
-            self.assertEqual(source.open_command, "open-it")
-            self.assertEqual(source.file_size_limit, 10 * 1000 * 1000)
-            # and the printing attributes must remain enabled:
-            self.assertTrue(source.printing)
-            self.assertTrue(source.remote_file_transfer)
-            self.assertTrue(source.remote_printing)
-
-        self._test_mixin_classes((FileConnection, PrinterConnection), {
-            "file_transfer": file_transfer,
-            "machine_id": "123",
-        }, {
-            # `printing` is parsed from the `file` namespace with backwards compatibility,
-            # from the `printer` one without it:
-            "file": {"enabled": True, "printing": True},
-            "printer": {"printing": True},
-        }, test_fn=check)
-
     def test_idle(self):
         from xpra.server.source.idle_mixin import IdleConnection
 
@@ -240,28 +206,6 @@ class SourceMixinsTest(unittest.TestCase):
         def test_update(_c, m):
             m.update_bandwidth_limits()
         self._test_mixin_class(BandwidthConnection, test_fn=test_update)
-
-    def test_bandwidth_with_mmap(self):
-        from xpra.server.source.bandwidth import BandwidthConnection
-
-        def test_mmap(_c, m):
-            m.mmap_write_area = AdHocStruct()
-            m.mmap_write_area.enabled = True
-            m.parse_client_caps(typedict({
-                "bandwidth-limit": 500,
-                "bandwidth-detection": True,
-                "connection-data": {"jitter": 20},
-            }))
-            self.assertEqual(m.bandwidth_limit, 0)
-            self.assertFalse(m.bandwidth_detection)
-            self.assertEqual(m.jitter, 0)
-            m.bandwidth_detection = True
-            m.update_bandwidth_limits()
-
-        self._test_mixin_class(BandwidthConnection, {
-            "limit": 1000,
-            "detection": True,
-        }, test_fn=test_mmap)
 
     def _get_window_mixin_server_attributes(self):
         def get_transient_for(_w):

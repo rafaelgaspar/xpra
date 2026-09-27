@@ -466,9 +466,7 @@ class WindowServer(StubServerMixin):
         if not skip_geometry:
             config["geometry"] = (x, y, w, h)
         if len(packet) >= 8:
-            # Legacy clients have historically used -1 as the sentinel for
-            # a resize notification without a counter.
-            config["resize-counter"] = packet.get_i64(7)
+            config["resize-counter"] = packet.get_u64(7)
         if len(packet) >= 7:
             cprops = packet.get_dict(6)
             if cprops:
@@ -530,15 +528,9 @@ class WindowServer(StubServerMixin):
                     window.move_resize(-200, -200, w, h)
             else:
                 # code more or less duplicated from _send_new_window_packet:
-                x, y, w, h = window.get_property("geometry")
-                if w == h == 0:
-                    # The Wayland backend registers a 0x0 model before its first
-                    # valid commit. Its update_size() path sends the create packet
-                    # when that model becomes ready.
-                    log("not sending initial window %#x with zero dimensions", wid)
-                    continue
                 if not sharing and not window.is_OR():
                     window.hide()
+                x, y, w, h = window.get_property("geometry")
                 wprops = self.client_properties.get(wid, {}).get(ss.uuid, {})
                 packet_type = "new-override-redirect" if (window.is_OR() and BACKWARDS_COMPATIBLE) else WINDOW_CREATE
                 ss.new_window(packet_type, wid, window, x, y, w, h, wprops)
