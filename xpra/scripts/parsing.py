@@ -1075,6 +1075,12 @@ def parse_command_line(cmdline: list[str], defaults: XpraConfig):
                           " taken into account by the exit-with-children option"
                           " (may be repeated to run multiple commands)."
                           " Default: %s." % dcsv(defaults.start_child))
+    group.add_option("--adopt-children", action="append",
+                     dest="adopt_children", metavar="PID", default=mlist(defaults.adopt_children),
+                     help="adopt the windows of an already-running process into this session,"
+                          " as if it had been launched with --start-child"
+                          " (may be repeated to adopt multiple processes)."
+                          " Default: %s." % dcsv(defaults.adopt_children))
     group.add_option("--start-child-late", action="append",
                      dest="start_child_late", metavar="CMD", default=mlist(defaults.start_child_late),
                      help="program to spawn in server once initialization is complete"
