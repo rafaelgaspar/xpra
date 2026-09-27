@@ -88,7 +88,7 @@ def parse_command_line(argv: list[str]):
     add("zip-modules", help="zip up python modules")
     add("printing", help="bundle pdfium for remote printing")
     add("cuda", help="build CUDA kernels for nvidia codecs")
-    add("service", help="build the system service", default=False)
+    add("service", help="build the system service", default=ARCH != "aarch64")
     add("docs", help="generate the documentation", default=ARCH != "aarch64")
     add("html5", help="bundle the `xpra-html5` client")
     add("x11", help="include X11 bindings", default=False)
@@ -198,6 +198,19 @@ def find_command(name: str, env_name: str, *paths) -> str:
     print(f" tried %PATH%={os.environ.get('PATH')}")
     print(f" tried {paths=}")
     raise RuntimeError(f"{name!r} not found")
+
+
+def search_command(wholename: str, *dirs: str) -> str:
+    debug(f"searching for {wholename!r} in {dirs}")
+    for dirname in dirs:
+        if not os.path.exists(dirname):
+            continue
+        cmd = ["find", dirname, "-wholename", wholename]
+        r, output = getstatusoutput(cmd)
+        debug(f"getstatusoutput({cmd})={r}, {output}")
+        if r == 0:
+            return output.splitlines()[0]
+    raise RuntimeError(f"{wholename!r} not found in {dirs}")
 
 
 def find_java() -> str:
@@ -359,21 +372,14 @@ def find_vs_command(name="link") -> str:
     cwd_cmd = os.path.abspath(f"./{name}.exe")
     if os.path.exists(cwd_cmd):
         return cwd_cmd
-    # let `vswhere` locate the latest Visual Studio installation with the C++ tools:
-    vswhere = f"{PROGRAMFILES_X86}\\Microsoft Visual Studio\\Installer\\vswhere.exe"
-    if not os.path.exists(vswhere):
-        raise RuntimeError(f"`vswhere` not found at {vswhere!r}, install Visual Studio using `SETUP_EXTRAS.sh`")
-    cmd = [
-        vswhere, "-latest", "-products", "*",
-        "-requires", "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
-        "-find", f"VC\\Tools\\MSVC\\**\\bin\\Hostx64\\x64\\{name}.exe",
-    ]
-    paths = check_output(cmd, text=True).splitlines()
-    debug(f"{cmd}={paths}")
-    if not paths:
-        raise RuntimeError(f"{name!r} not found using {vswhere!r}")
-    # if there is more than one MSVC toolset, use the newest one:
-    return sorted(paths)[-1]
+    dirs = []
+    for prog_dir in (PROGRAMFILES, PROGRAMFILES_X86):
+        for VSV in (14.0, 17.0, 19.0, 2019, 2022):
+            vsdir = f"{prog_dir}\\Microsoft Visual Studio\\{VSV}"
+            if os.path.exists(vsdir):
+                dirs.append(f"{vsdir}\\VC\\bin")
+                dirs.append(f"{vsdir}\\BuildTools\\VC\\Tools\\MSVC")
+    return search_command(f"*/x64/{name}.exe", *dirs)
 
 
 def build_service() -> None:
@@ -1223,17 +1229,8 @@ def rec_sbom() -> None:
     copyfile(BUILD_INFO, f"{LIB_DIR}/{BUILD_INFO}")
 
 
-def find_win_python() -> str:
-    # SETUP_SBOM.sh installs the global interpreter into "Python", not "PythonXXX":
-    for subdir in ("Python", "Python311"):
-        python_exe = f"{PROGRAMFILES}\\{subdir}\\python.exe"
-        if os.path.exists(python_exe):
-            return python_exe
-    raise RuntimeError(f"could not find python.exe in {PROGRAMFILES!r}")
-
-
 def export_sbom() -> None:
-    WIN_PYTHON = find_win_python()
+    WIN_PYTHON = "C:\\Program Files\\Python312\\python.exe"
     SBOM_SCRIPT = "packaging\\MSWindows\\cyclonedx_sbom.py"
     output = f"{DIST}/{SBOM_JSON}"
     delfile(output)
@@ -1247,12 +1244,10 @@ def export_sbom() -> None:
 
 
 def verpatch() -> None:
-    verpatch_exe = find_command("verpatch", "VERPATCH",
-                                "packaging/MSWindows/tools/verpatch.exe")
     EXCLUDE = ("plink", "openssh", "openssl", "paexec")
 
     def run_verpatch(filename: str, descr: str) -> None:
-        log_command([verpatch_exe, filename,
+        log_command(["verpatch", filename,
                      "/s", "desc", descr,
                      "/va", version_info.padded,
                      "/s", "company", "xpra.org",

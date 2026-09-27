@@ -378,9 +378,6 @@ cdef class XImageWrapper:
     def set_rowstride(self, unsigned int rowstride) -> None:
         self.rowstride = rowstride
 
-    def set_bytesperpixel(self, unsigned int bytesperpixel) -> None:
-        self.bytesperpixel = bytesperpixel
-
     def set_pixel_format(self, pixel_format) -> None:
         assert pixel_format is not None and pixel_format in RGB_FORMATS, "invalid pixel format: %s" % pixel_format
         self.pixel_format = pixel_format
@@ -519,23 +516,18 @@ cdef class DrawableWrapper:
     cdef Drawable drawable
     cdef unsigned int width
     cdef unsigned int height
-    # `owned` is only set for pixmaps we have allocated ourselves,
-    # ie: the composite pixmaps named by `XCompositeNameWindowPixmap`.
-    # Windows are not owned: calling `XFreePixmap` on one is an X11 error.
-    cdef bint owned
 
-    cdef void init(self, Display *display, Drawable drawable, unsigned int width, unsigned int height, bint owned) noexcept:
+    cdef void init(self, Display *display, Drawable drawable, unsigned int width, unsigned int height) noexcept:
         self.display = display
         self.drawable = drawable
         self.width = width
         self.height = height
-        self.owned = owned
         global drawable_counter
         drawable_counter += 1
         ximagedebug("%s xpixmap counter: %i", self, drawable_counter)
 
     def __repr__(self):
-        return "DrawableWrapper(%#x, %i, %i, owned=%s)" % (self.drawable, self.width, self.height, bool(self.owned))
+        return "DrawableWrapper(%#x, %i, %i)" % (self.drawable, self.width, self.height)
 
     def get_width(self) -> int:
         return self.width
@@ -565,11 +557,9 @@ cdef class DrawableWrapper:
         self.do_cleanup()
 
     cdef void do_cleanup(self) noexcept:
-        cdef Drawable drawable = self.drawable
+        cdef drawable = self.drawable
         if drawable != 0:
             self.drawable = 0
-            if self.owned:
-                XFreePixmap(self.display, drawable)
             global drawable_counter
             drawable_counter -= 1
 
@@ -602,26 +592,7 @@ cdef class XImageBindingsInstance(X11CoreBindingsInstance):
         return self.wrap_drawable(xwindow)
 
     def wrap_drawable(self, Drawable drawable):
-        # the drawable is not ours to free: usually a window
         self.context_check("wrap_drawable")
-        return self.do_wrap(drawable, False)
-
-    def wrap_pixmap(self, Pixmap pixmap):
-        # this takes ownership of the pixmap unconditionally:
-        # either the wrapper returned owns it and will free it when it is
-        # cleaned up or garbage collected, or it is freed here and now.
-        # That includes failing to wrap it and raising:
-        # the caller must never free the pixmap it hands over.
-        cdef DrawableWrapper pw = None
-        try:
-            self.context_check("wrap_pixmap")
-            pw = self.do_wrap(pixmap, True)
-        finally:
-            if pw is None:
-                XFreePixmap(self.display, pixmap)
-        return pw
-
-    cdef DrawableWrapper do_wrap(self, Drawable drawable, bint owned):
         cdef Window root_window
         cdef int x, y
         cdef unsigned width, height, border, depth
@@ -631,7 +602,7 @@ cdef class XImageBindingsInstance(X11CoreBindingsInstance):
             log("failed to get dimensions for %#x", drawable)
             return None
         cdef DrawableWrapper pw = DrawableWrapper()
-        pw.init(self.display, drawable, width, height, owned)
+        pw.init(self.display, drawable, width, height)
         return pw
 
 

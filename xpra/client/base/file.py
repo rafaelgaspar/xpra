@@ -55,6 +55,6 @@ class FileMixin(StubClientMixin, FileTransferHandler):
 
     def parse_server_capabilities(self, c: typedict) -> bool:
         self.parse_file_transfer_caps(c)
-        fc = typedict(c.dictget("file") or {})
+        fc = typedict(c.dictget("file"))
         self.remote_request_file = fc.boolget("request-file", c.boolget("request-file", False))
         return True

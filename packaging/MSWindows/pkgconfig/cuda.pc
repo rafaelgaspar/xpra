@@ -1,10 +1,10 @@
 cudaroot=./cuda
-libdir=${cudaroot}/lib/x64
+libdir=${cudaroot}/bin
 includedir=${cudaroot}/include
 
 Name: cuda
 Description: CUDA Driver Library
-Version: 13
-Libs: "-L${libdir}" -lcuda
+Version: 12
+Libs: "-L${libdir}"  "-L${cudaroot}/lib/x64" -lcuda
 #for GCC versions 8.0 and older, add: "-Wno-error=sign-compare"
 Cflags: "-I${includedir}" -Wno-error=deprecated-declarations

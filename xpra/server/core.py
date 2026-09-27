@@ -25,7 +25,7 @@ from xpra.server import ServerExitMode
 from xpra.util.parsing import TRUE_OPTIONS, FALSE_OPTIONS, parse_bool_or
 from xpra.net.common import (
     is_request_allowed, pretty_socket, has_websocket_handler, HttpResponse, Packet,
-    FULL_INFO, LOG_HELLO, BACKWARDS_COMPATIBLE, MIN_PROTOCOL_VERSION,
+    FULL_INFO, LOG_HELLO, BACKWARDS_COMPATIBLE,
 )
 from xpra.net.constants import MAX_PACKET_SIZE, HTTP_UNSUPORTED, ConnectionMessage
 from xpra.net.digest import get_caps as get_digest_caps
@@ -813,18 +813,12 @@ class ServerCore(ServerBaseClass):
             # try to read from this socket,
             # so short-lived probes don't go through the whole protocol instantiation
             pre = socket_fast_read(conn)
-            if pre is None:
-                # still connected, just nothing to read yet:
-                # clients can take a while to send their `hello` packet
-                # (see `socket_fast_read`), so carry on without a pre-read
-                netlog("%s connection has not sent anything yet", socktype)
-            elif not pre:
+            if not pre:
                 netlog("closing %s connection: no data", socktype)
                 force_close_connection(conn)
                 return
-            else:
-                pre_read.append(pre)
-                packet_type = guess_packet_type(pre)
+            pre_read.append(pre)
+            packet_type = guess_packet_type(pre)
 
         if packet_type not in ("xpra", ""):
             conn_err("packet type is not xpra")
@@ -1512,8 +1506,6 @@ class ServerCore(ServerBaseClass):
             "elapsed_time": int(now - self.start_time),
             "server_type": "core",
             "server.mode": self.session_type,
-            # the minimum version we are willing to talk to:
-            "protocol": MIN_PROTOCOL_VERSION,
         }
         if FULL_INFO > 0:
             capabilities["hostname"] = socket.gethostname()

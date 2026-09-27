@@ -50,7 +50,6 @@ class FakeSink:
 class AudioConnection(StubClientConnection):
 
     PREFIX = "audio"
-    __signals__ = ("suspend", "resume")
 
     @classmethod
     def is_needed(cls, caps: typedict) -> bool:
@@ -173,10 +172,6 @@ class AudioConnection(StubClientConnection):
 
     def get_caps(self) -> dict[str, Any]:
         log("get_caps() audio-properties=%s", self.audio_properties)
-        if not (self.supports_speaker or self.supports_microphone):
-            # the server does not register any audio packet handlers in this case,
-            # so don't ask the client to send us `audio-capabilities`:
-            return {}
         if not BACKWARDS_COMPATIBLE:
             # tell the client to send us a packet when it is ready:
             return {AudioConnection.PREFIX: {"async": True}}

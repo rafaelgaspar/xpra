@@ -33,7 +33,6 @@ cdef extern from "X11/X.h":
     unsigned long AnyPropertyType
     unsigned int PropModeReplace
     unsigned int PropertyNotify
-    unsigned int PropertyNewValue
     unsigned int Expose
 
 
@@ -272,8 +271,8 @@ cdef extern from "X11/Xlib.h":
     #Threading:
     Status XInitThreads()
 
-    # Xlib may invoke these callbacks without the Python GIL.
-    ctypedef int (*X11IOERRORHANDLER)(Display *) noexcept nogil
+    # error handling:
+    ctypedef int (*X11IOERRORHANDLER)(Display *) except 0
     int XSetIOErrorHandler(X11IOERRORHANDLER  handler)
     ctypedef struct XErrorEvent:
         int type
@@ -283,7 +282,7 @@ cdef extern from "X11/Xlib.h":
         unsigned char request_code
         unsigned char minor_code
         XID resourceid
-    ctypedef int (*X11ERRORHANDLER)(Display *, XErrorEvent *event) noexcept nogil
+    ctypedef int (*X11ERRORHANDLER)(Display *, XErrorEvent *event) except 0
     int XSetErrorHandler(X11ERRORHANDLER handler)
 
     # events:
@@ -513,7 +512,6 @@ cdef extern from "X11/Xlib.h":
         Window window
         Atom atom
         Time time
-        int state
     ctypedef struct XKeyEvent:
         unsigned int state
         unsigned int keycode

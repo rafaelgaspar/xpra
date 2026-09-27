@@ -572,12 +572,10 @@ def add_window_hooks(window) -> None:
                 apply_maxsize_hints(window, window.geometry_hints)
 
         if LANGCHANGE:
-            def inputlangchange(_hwnd: int, _event: int, wParam: int, lParam: int) -> None:
+            def inputlangchange(_hwnd: int, _event: int, wParam: int, lParam: int) -> int:
                 keylog("WM_INPUTLANGCHANGE: character set: %i, input locale identifier: %i", wParam, lParam)
                 window.keyboard_layout_changed("WM_INPUTLANGCHANGE", wParam, lParam)
-                # Let GDK handle this too: it updates its active keymap and
-                # emits `keys-changed` for the newly selected layout.
-                return None
+                return 0
 
             win32hooks.add_window_event_handler(win32con.WM_INPUTLANGCHANGE, inputlangchange)
 

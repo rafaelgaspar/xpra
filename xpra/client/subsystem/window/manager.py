@@ -133,20 +133,18 @@ class WindowManagerClient(StubClientMixin):
     # hello:
     def get_caps(self) -> dict[str, Any]:
         # FIXME: the messy bits without proper namespace:
-        caps: dict[str, Any] = {
+        caps = {
+            # features:
+            "windows": self.windows_enabled,
             "window": self.get_window_caps(),
             "auto_refresh_delay": int(self.auto_refresh_delay * 1000),
         }
-        if BACKWARDS_COMPATIBLE:
-            # older servers look for this flag outside the `window` namespace:
-            caps["windows"] = self.windows_enabled
         return caps
 
     def get_window_caps(self) -> dict[str, Any]:
         if not self.windows_enabled:
             return {}
         return {
-            "enabled": True,
             # implemented in the gtk client:
             "min-size": self.min_window_size,
             "max-size": self.max_window_size,
@@ -194,11 +192,11 @@ class WindowManagerClient(StubClientMixin):
             # find any modal windows and remove the flag
             # so that the OR window can get the focus
             # (it will be re-enabled when the OR window disappears)
-            for existing_wid, window in self._id_to_window.items():
+            for wid, window in self._id_to_window.items():
                 if window.is_OR() or window.is_tray():
                     continue
                 if window.get_modal():
-                    metalog("temporarily removing modal flag from %s", existing_wid)
+                    metalog("temporarily removing modal flag from %s", wid)
                     window.set_modal(False)
         metalog("process_new_common: %s, metadata=%s, OR=%s", packet[1:7], metadata, override_redirect)
         if wid in self._id_to_window:
@@ -466,7 +464,7 @@ class WindowManagerClient(StubClientMixin):
         ay = self.sy(y)
         aw = max(1, self.sx(w))
         ah = max(1, self.sy(h))
-        resize_counter = 0
+        resize_counter = -1
         if len(packet) > 6:
             resize_counter = int(packet[6])
         window = self.get_window(wid)
@@ -481,7 +479,7 @@ class WindowManagerClient(StubClientMixin):
         h = int(packet[3])
         aw = max(1, self.sx(w))
         ah = max(1, self.sy(h))
-        resize_counter = 0
+        resize_counter = -1
         if len(packet) > 4:
             resize_counter = int(packet[4])
         window = self.get_window(wid)
@@ -524,7 +522,7 @@ class WindowManagerClient(StubClientMixin):
                 continue
             if w._metadata.boolget("modal") and not w.get_modal():
                 metalog("re-enabling modal flag on %#x", wid)
-                w.set_modal(True)
+                window.set_modal(True)
 
     def destroy_window(self, wid: int, window) -> None:
         log("destroy_window(%s#x, %s)", wid, window)

@@ -83,9 +83,7 @@ class MmapIOTest(unittest.TestCase):
             (("a", "b"), ),         # not integers
             (8, ),                  # not a sequence
         ):
-            # Cython's concrete tuple[int, int] argument checks reject malformed
-            # chunks before validate_chunks() can turn them into ValueError.
-            with self.assertRaises((TypeError, ValueError)):
+            with self.assertRaises(ValueError):
                 mmap_read(area, *chunks)
 
     def test_invalid_pointers(self):

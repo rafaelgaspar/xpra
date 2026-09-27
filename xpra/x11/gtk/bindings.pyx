@@ -124,12 +124,7 @@ def get_pywindow(Window xwindow) -> GdkX11.X11Window | None:
 
 cdef Display * get_xdisplay() except? NULL:
     gdk_display = Gdk.get_default_root_window().get_display()
-    cdef GdkDisplay *raw_display = get_raw_display(gdk_display)
-    # `GDK_DISPLAY_XDISPLAY` is an unchecked cast:
-    # using it on a wayland display would return a bogus pointer
-    if not is_x11_display(raw_display):
-        raise RuntimeError(f"{gdk_display} is not an X11 display")
-    return GDK_DISPLAY_XDISPLAY(raw_display)
+    return GDK_DISPLAY_XDISPLAY(get_raw_display(gdk_display))
 
 
 ###################################
@@ -191,10 +186,9 @@ cdef GdkFilterReturn x_event_filter(GdkXEvent * e_gdk,
     cdef double start = monotonic()
     cdef int etype
 
-    cdef Display *display = NULL
+    cdef Display *display = get_xdisplay()
     cdef XEvent * e = <XEvent*>e_gdk
     try:
-        display = get_xdisplay()
         pyev = parse_xevent(display, e)
     except Exception:
         log.error("Error parsing X11 event", exc_info=True)
@@ -228,21 +222,15 @@ def init_x11_filter() -> bool:
     global _INIT_X11_FILTER_DONE
     cdef Display *display
     if _INIT_X11_FILTER_DONE==0:
-        # this also validates that we do have an X11 display:
         display = get_xdisplay()
         init_x11_events()
         gdk_window_add_filter(<GdkWindow*>0, x_event_filter, NULL)
-    _INIT_X11_FILTER_DONE += 1
+        _INIT_X11_FILTER_DONE += 1
     return _INIT_X11_FILTER_DONE==1
 
 def cleanup_x11_filter() -> bool:
     log("cleanup_x11_filter()")
     global _INIT_X11_FILTER_DONE
-    if _INIT_X11_FILTER_DONE<=0:
-        # an unmatched call must not take the count negative,
-        # or the next `init_x11_filter` would not install the filter:
-        log.warn("Warning: cleanup_x11_filter() called without a matching init_x11_filter()")
-        return False
     _INIT_X11_FILTER_DONE -= 1
     if _INIT_X11_FILTER_DONE==0:
         gdk_window_remove_filter(<GdkWindow*>0, x_event_filter, NULL)
