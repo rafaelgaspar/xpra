@@ -20,12 +20,11 @@ from xpra.net.tls.parsing import (
     parse_ssl_options_mask, parse_ssl_verify_mask, parse_ssl_protocol, parse_ssl_verify_mode,
 )
 from xpra.scripts.config import InitExit, InitException
-from xpra.util.env import envbool, envint
+from xpra.util.env import envbool
 from xpra.util.parsing import parse_encoded_bin_data
 from xpra.util.str_fn import print_nested_dict, Ellipsizer
 
 SSL_RETRY = envbool("XPRA_SSL_RETRY", True)
-SSL_HANDSHAKE_TIMEOUT = envint("XPRA_SSL_HANDSHAKE_TIMEOUT", 20)
 
 
 def ssl_wrap_socket(sock, **kwargs):
@@ -51,35 +50,8 @@ def log_ssl_info(ssl_sock) -> None:
             print_nested_dict(ssl_sock.getpeercert(), prefix=" ", print_fn=log)
 
 
-def get_peer_cert_data(ssl_sock) -> str:
-    """
-    The PEM certificate the peer presented, even if the handshake failed to verify it.
-    This requires Python 3.13 or later, `getpeercert()` refuses incomplete handshakes.
-    """
-    get_unverified_chain = getattr(ssl_sock, "get_unverified_chain", None)
-    if not get_unverified_chain:
-        return ""
-    try:
-        chain = get_unverified_chain()
-        if not chain:
-            return ""
-        cert = chain[0]
-        if isinstance(cert, bytes):
-            import ssl
-            return ssl.DER_cert_to_PEM_cert(cert)
-        # Python 3.13.0 returns `_ssl.Certificate` objects:
-        return cert.public_bytes()
-    except (OSError, ValueError, AttributeError):
-        get_ssl_logger()("get_unverified_chain()", exc_info=True)
-        return ""
-
-
-def ssl_handshake(ssl_sock, timeout: float = SSL_HANDSHAKE_TIMEOUT) -> None:
+def ssl_handshake(ssl_sock) -> None:
     log = get_ssl_logger()
-    # the socket is usually in blocking mode (see `do_wrap_socket`),
-    # don't wait forever for a peer that never completes the handshake:
-    previous_timeout = ssl_sock.gettimeout()
-    ssl_sock.settimeout(timeout)
     try:
         ssl_sock.do_handshake(True)
         log.info("SSL handshake complete, %s", ssl_sock.version())
@@ -88,12 +60,10 @@ def ssl_handshake(ssl_sock, timeout: float = SSL_HANDSHAKE_TIMEOUT) -> None:
         log("do_handshake", exc_info=True)
         log_ssl_info(ssl_sock)
         import ssl
+        ssleof_error = getattr(ssl, "SSLEOFError", None)
+        if ssleof_error and isinstance(e, ssleof_error):
+            return
         status = ExitCode.SSL_FAILURE
-        if isinstance(e, (ssl.SSLEOFError, ConnectionError)):
-            # the handshake did not complete, so the socket is unusable:
-            raise InitExit(status, "the connection was closed during the SSL handshake") from None
-        if isinstance(e, TimeoutError):
-            raise InitExit(status, f"SSL handshake timed out after {timeout} seconds") from None
         ssl_cert_verification_error = getattr(ssl, "SSLCertVerificationError", None)
         if ssl_cert_verification_error and isinstance(e, ssl_cert_verification_error):
             verify_code = getattr(e, "verify_code", 0)
@@ -104,13 +74,8 @@ def ssl_handshake(ssl_sock, timeout: float = SSL_HANDSHAKE_TIMEOUT) -> None:
                 msg = str(e)
             status = ExitCode.SSL_CERTIFICATE_VERIFY_FAILURE
             log("host failed SSL verification: %s", msg)
-            raise SSLVerifyFailure(status, msg, verify_code, get_peer_cert_data(ssl_sock)) from None
+            raise SSLVerifyFailure(status, msg, verify_code, ssl_sock) from None
         raise InitExit(status, f"SSL handshake failed: {e}") from None
-    finally:
-        try:
-            ssl_sock.settimeout(previous_timeout)
-        except OSError:
-            log("failed to restore the socket timeout", exc_info=True)
 
 
 def get_ssl_wrap_socket_context(cert="", key="", key_password="", ca_certs="", ca_data="",
@@ -235,110 +200,33 @@ def do_wrap_socket(tcp_socket, context, **kwargs):
         raise InitExit(ExitCode.SSL_FAILURE, f"Cannot wrap socket {tcp_socket}: {e}") from None
 
 
-def get_cert_fingerprint(cert_data: str) -> str:
-    import ssl
-    from hashlib import sha256
-    try:
-        digest = sha256(ssl.PEM_cert_to_DER_cert(cert_data)).hexdigest().upper()
-    except ValueError:
-        return ""
-    return ":".join(digest[i:i + 2] for i in range(0, len(digest), 2))
-
-
-def get_cert_file_fingerprint(filename: str) -> str:
-    try:
-        with open(filename, encoding="latin1") as f:
-            return get_cert_fingerprint(f.read())
-    except OSError:
-        get_ssl_logger()("failed to read %r", filename, exc_info=True)
-        return ""
-
-
-def warn_certificate_changed(cert_file: str, cert_data: str) -> None:
-    """
-    Like ssh does when a host key changes, we don't offer to accept the new certificate:
-    the server may have been re-configured, or the connection may have been intercepted.
-    """
+def ssl_retry(e, ssl_ca_certs: str) -> dict[str, Any]:
     log = get_ssl_logger()
-    log.warn("Warning: the server's certificate does not match the one accepted previously")
-    log.warn(" previous certificate: %r", cert_file)
-    log.warn(" previous SHA256 fingerprint: %s", get_cert_file_fingerprint(cert_file) or "unknown")
-    log.warn(" new SHA256 fingerprint: %s", get_cert_fingerprint(cert_data) or "unknown")
-    log.warn(" if the server's certificate has been changed legitimately,")
-    # the saved options refer to this certificate, so remove both:
-    log.warn(" delete %r and connect again", os.path.dirname(cert_file))
-
-
-def get_server_certificate(display_desc: dict[str, Any], server_hostname: str) -> str:
-    """
-    Download the server's certificate without verifying it.
-    Unlike `ssl.get_server_certificate`, this connects the same way the client does,
-    so a `proxy-host` is honoured: the destination may only be reachable through it,
-    and we must not resolve it locally or connect to it directly.
-    """
-    import ssl
-    from xpra.net.connect import retry_socket_connect
-    log = get_ssl_logger()
-    # the server was reachable a moment ago, don't keep retrying if it isn't anymore:
-    options = dict(display_desc, retry=False)
-    try:
-        sock = retry_socket_connect(options)
-    except (OSError, ValueError, InitExit):
-        log("retry_socket_connect(%s)", options, exc_info=True)
-        return ""
-    try:
-        # use the same protocol, ciphers, options and client certificate as the connection that failed,
-        # or the server may refuse a handshake it would otherwise accept, but don't verify anything:
-        ssl_options = {k.replace("-", "_"): v for k, v in (display_desc.get("ssl-options") or {}).items()}
-        ssl_options.update({
-            "server_side": False,
-            "server_verify_mode": "none",
-            "check_hostname": False,
-            "server_hostname": server_hostname,
-        })
-        context = get_ssl_wrap_socket_context(**ssl_options)[0]
-        sock.settimeout(SSL_HANDSHAKE_TIMEOUT)
-        with context.wrap_socket(sock, server_hostname=server_hostname) as ssl_sock:
-            der = ssl_sock.getpeercert(binary_form=True)
-        return ssl.DER_cert_to_PEM_cert(der) if der else ""
-    except (OSError, ValueError, TypeError, ssl.SSLError, InitException):
-        log("get_server_certificate(%s, %s)", display_desc, server_hostname, exc_info=True)
-        return ""
-    finally:
-        sock.close()
-
-
-def ssl_retry(e, display_desc: dict[str, Any]) -> dict[str, Any]:
-    """
-    Ask the user whether to accept the certificate that failed verification.
-    Returns the ssl options to change before connecting again, if any.
-    The socket is gone by the time we get here,
-    so we use the connection target from `display_desc` and the certificate recorded in `e`.
-    """
-    log = get_ssl_logger()
-    log("ssl_retry(%s, %s) SSL_RETRY=%s", e, display_desc, SSL_RETRY)
+    log("ssl_retry(%s, %s) SSL_RETRY=%s", e, ssl_ca_certs, SSL_RETRY)
     if not SSL_RETRY:
         return {}
     if not isinstance(e, SSLVerifyFailure):
         return {}
     # we may be able to ask the user if he wants to accept this certificate
     verify_code = e.verify_code
+    ssl_sock = e.ssl_sock
+    msg = str(e)
+    del e
+    addr = ssl_sock.getpeername()[:2]
+    port = addr[-1]
+    server_hostname = ssl_sock.server_hostname
+    log("ssl_retry: peername=%s, server_hostname=%s", addr, server_hostname)
     if verify_code not in (
             SSL_VERIFY_SELF_SIGNED, SSL_VERIFY_WRONG_HOST,
             SSL_VERIFY_IP_MISMATCH, SSL_VERIFY_HOSTNAME_MISMATCH,
     ):
         log("ssl_retry: %s not handled here", SSL_VERIFY_CODES.get(verify_code, verify_code))
         return {}
-    host = display_desc.get("host", "")
-    port = display_desc.get("port", 0)
-    ssl_options = display_desc.get("ssl-options") or {}
-    # the same host and port that `get_ssl_options` loads the saved options from:
-    server_hostname = ssl_options.get("server-hostname") or host
-    if not server_hostname or not port:
-        log("ssl_retry: unknown target %r, port %r", server_hostname, port)
+    if not server_hostname:
+        log("ssl_retry: no server hostname")
         return {}
-    log("ssl_retry: server_hostname=%s, port=%s, ssl verify_code=%s (%i)",
-        server_hostname, port, SSL_VERIFY_CODES.get(verify_code, verify_code), verify_code)
+    log("ssl_retry: server_hostname=%s, ssl verify_code=%s (%i)",
+        server_hostname, SSL_VERIFY_CODES.get(verify_code, verify_code), verify_code)
 
     def confirm(*args) -> bool:
         from xpra.scripts import pinentry
@@ -346,60 +234,52 @@ def ssl_retry(e, display_desc: dict[str, Any]) -> dict[str, Any]:
         log("run_pinentry_confirm(..) returned %r", ret)
         return ret
 
-    msg = str(e)
-    title = "SSL Certificate Verification Failure"
+    options = load_ssl_options(server_hostname, port)
     # self-signed cert:
     if verify_code == SSL_VERIFY_SELF_SIGNED:
-        ca_certs = ssl_options.get("ca-certs", "default")
+        if ssl_ca_certs not in ("", "default"):
+            log("self-signed cert does not match %r", ssl_ca_certs)
+            return {}
         # perhaps we already have the certificate for this hostname
         cert_file = find_ssl_config_file(server_hostname, port, CERT_FILENAME)
-        # older Python versions can't tell us which certificate failed, assume it has changed:
-        changed = bool(cert_file) and (not e.cert_data or get_cert_fingerprint(e.cert_data) != get_cert_file_fingerprint(cert_file))
-        if ca_certs not in ("", "default"):
-            if changed and os.path.abspath(ca_certs) == cert_file:
-                # we have connected with the certificate we saved, and it no longer matches:
-                warn_certificate_changed(cert_file, e.cert_data)
-            else:
-                log("self-signed cert does not match %r", ca_certs)
-            return {}
         if cert_file:
-            if e.cert_data and changed:
-                # don't retry with a certificate we already know won't match:
-                warn_certificate_changed(cert_file, e.cert_data)
-                return {}
             log("retrying with %r", cert_file)
-            return {"ca-certs": cert_file}
-        cert_data = e.cert_data
+            options["ca-certs"] = cert_file
+            return options
+        # download the certificate data
+        import ssl
+        try:
+            cert_data = ssl.get_server_certificate(addr)
+        except ssl.SSLError:
+            cert_data = ""
         if not cert_data:
-            # older Python versions can't give us the certificate that failed, download it.
-            # This connects by hostname again, so it may reach a different peer (ie: round-robin DNS),
-            # that's fine: the certificate we show the fingerprint of is the one we save and trust,
-            # and the retry is verified against it, whichever peer it reaches:
-            cert_data = get_server_certificate(display_desc, server_hostname)
-            if not cert_data:
-                log.warn("Warning: failed to get server certificate from %s:%s", host, port)
-                return {}
-            log("downloaded ssl cert data for %s:%s: %s", host, port, Ellipsizer(cert_data))
+            log.warn("Warning: failed to get server certificate from %s", addr)
+            return {}
+        log("downloaded ssl cert data for %s: %s", addr, Ellipsizer(cert_data))
         # ask the user if he wants to accept this certificate:
-        fingerprint = get_cert_fingerprint(cert_data)
-        lines = (msg, f"SHA256 fingerprint: {fingerprint}") if fingerprint else (msg, )
-        if not confirm(lines, title, "Do you want to accept this certificate?"):
+        title = "SSL Certificate Verification Failure"
+        prompt = "Do you want to accept this certificate?"
+        if not confirm((msg,), title, prompt):
             return {}
         filename = save_ssl_config_file(server_hostname, port,
                                         CERT_FILENAME, "certificate", cert_data.encode("latin1"))
         if not filename:
             log.warn("Warning: failed to save certificate data")
             return {}
-        mods = {"ca-certs": filename}
-    else:
+        options["ca-certs"] = filename
+        save_ssl_options(server_hostname, port, options)
+        return options
+    if verify_code in (SSL_VERIFY_WRONG_HOST, SSL_VERIFY_IP_MISMATCH, SSL_VERIFY_HOSTNAME_MISMATCH):
         # ask the user if he wants to skip verifying the host
-        if not confirm((msg,), title, "Do you want to connect anyway?"):
-            return {}
-        log.info(title)
-        log.info(" user chose to connect anyway")
-        log.info(" retrying without checking the hostname")
-        mods = {"check-hostname": False}
-    options = load_ssl_options(server_hostname, port)
-    options.update(mods)
-    save_ssl_options(server_hostname, port, options)
-    return mods
+        title = "SSL Certificate Verification Failure"
+        prompt = "Do you want to connect anyway?"
+        r = confirm((msg,), title, prompt)
+        log("run_pinentry_confirm(..) returned %r", r)
+        if r:
+            log.info(title)
+            log.info(" user chose to connect anyway")
+            log.info(" retrying without checking the hostname")
+            options["check-hostname"] = False
+            save_ssl_options(server_hostname, port, options)
+            return options
+    return {}

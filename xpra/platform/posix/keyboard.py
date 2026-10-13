@@ -276,15 +276,10 @@ class Keyboard(KeyboardBase):
         else:
             locale = get_locale_status()
             v = locale.get("X11 Layout", "")
-        if not v and is_X11():
+        if not v:
             # fallback:
-            try:
-                from xpra.x11.xroot_props import get_xkb_rules_names
-                props = get_xkb_rules_names()
-            except Exception as e:
-                log("get_xkb_rules_names()", exc_info=True)
-                log.warn("Warning: failed to query _XKB_RULES_NAMES: %s", e)
-                props = ()
+            from xpra.x11.xroot_props import get_xkb_rules_names
+            props = get_xkb_rules_names()
             # ie: ['evdev', 'pc104', 'gb,us', ',', '', '']
             if props and len(props) >= 3:
                 v = props[2]

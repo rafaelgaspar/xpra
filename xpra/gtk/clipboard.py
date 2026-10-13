@@ -14,6 +14,7 @@ from xpra.os_util import gi_import
 from xpra.util.str_fn import Ellipsizer
 from xpra.util.env import envint
 from xpra.log import Logger
+from xpra.util.system import is_Wayland
 
 Gtk = gi_import("Gtk")
 Gdk = gi_import("Gdk")
@@ -28,9 +29,7 @@ class GTK_Clipboard(ClipboardTimeoutHelper):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # `got_token` can only take ownership of a selection by setting its contents,
-        # so we need the peer to send them with the token - whatever the display backend:
-        self.local_greedy = True
+        self.local_greedy |= is_Wayland()
 
     def __repr__(self):
         return "GTK_Clipboard"
@@ -101,11 +100,6 @@ class GTKClipboardProxy(ClipboardProxyCore, GObject.GObject):
                 self.clipboard.set_text(text, -1)
                 return
             # we should handle more datatypes here..
-
-    def got_contents(self, target: str, dtype="", dformat: int = 0,
-                     data=None) -> None:
-        log("got_contents(%s, %s, %s, %s)",
-            target, dtype, dformat, Ellipsizer(data))
 
     ############################################################################
     # forward local requests to the remote clipboard:

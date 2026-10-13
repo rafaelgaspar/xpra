@@ -4,7 +4,6 @@
 # Xpra is released under the terms of the GNU GPL v2, or, at your option, any
 # later version. See the file COPYING for details.
 
-import re
 import struct
 from typing import Dict, List, Tuple
 from time import monotonic
@@ -37,10 +36,6 @@ GAMMA = envbool("XPRA_RANDR_GAMMA", False)
 MAX_NEW_MODES = envint("XPRA_RANDR_MAX_NEW_MODES", 32)
 assert MAX_NEW_MODES>=2
 SKIP_UNCHANGED = envbool("XPRA_RANDR_SKIP_UNCHANGED", True)
-# the output names chosen by virtual X11 servers: Xvfb, the dummy driver and Xwayland.
-# unlike monitor names, which we set from the client's own monitor names,
-# output names are chosen by the X11 server and cannot be changed:
-VFB_OUTPUT_NAME = re.compile(r"screen|DUMMY\d+|XWAYLAND\d+")
 
 
 from libc.stdint cimport uintptr_t   # pylint: disable=syntax-error
@@ -138,26 +133,18 @@ def dpi96(v) -> int:
     return round(v * 25.4 / 96)
 
 
-def vrefresh_hz_exact(vrefresh):
-    """
-    convert a refresh rate to Hz, without rounding.
-    The value may be given in Hz or in mHz, and defaults to `DEFAULT_REFRESH_RATE`.
-    """
-    if vrefresh <= 0:
-        vrefresh = DEFAULT_REFRESH_RATE
-    if vrefresh >= 1000:
-        # the value is in mHz:
-        return vrefresh / 1000
-    return vrefresh
-
-
 def vrefresh_hz(vrefresh) -> int:
     """
     round a refresh rate to the nearest integer Hz.
     Clients report jittery values which we don't want to mistake
     for monitor configuration changes: 59951 and 59952 mHz are both 60Hz.
     """
-    return round(vrefresh_hz_exact(vrefresh))
+    if vrefresh <= 0:
+        vrefresh = DEFAULT_REFRESH_RATE
+    if vrefresh >= 1000:
+        # the value is in mHz:
+        vrefresh = vrefresh / 1000
+    return round(vrefresh)
 
 
 def get_rotations(Rotation v) -> List[int]:
@@ -525,35 +512,6 @@ cdef dict get_output_properties(Display *display, RROutput output):
     return properties
 
 
-cdef bint is_vfb(Display *display):
-    """
-    Virtual displays can be given any resolution,
-    but adding modes to a real GPU output would try to drive the monitor with made up timings.
-    """
-    cdef Window window = XDefaultRootWindow(display)
-    cdef XRRScreenResources *rsc = XRRGetScreenResourcesCurrent(display, window)
-    if rsc==NULL:
-        log("is_vfb() cannot access screen resources")
-        return False
-    cdef XRROutputInfo *oi
-    names = []
-    try:
-        for i in range(rsc.noutput):
-            oi = XRRGetOutputInfo(display, rsc, rsc.outputs[i])
-            if oi==NULL:
-                log(f"is_vfb() output {i} not found")
-                return False
-            try:
-                names.append(s(oi.name[:oi.nameLen]))
-            finally:
-                XRRFreeOutputInfo(oi)
-    finally:
-        XRRFreeScreenResources(rsc)
-    vfb = bool(names) and all(VFB_OUTPUT_NAME.fullmatch(name) for name in names)
-    log(f"is_vfb() output names={names}: {vfb}")
-    return vfb
-
-
 cdef dict get_all_screen_properties(Display *display):
     cdef Window window = XDefaultRootWindow(display)
     cdef XRRScreenResources *rsc = XRRGetScreenResourcesCurrent(display, window)
@@ -582,7 +540,6 @@ cdef dict get_all_screen_properties(Display *display):
     finally:
         XRRFreeScreenResources(rsc)
     props["monitors"] = monitor_properties(display)
-    props["vfb"] = is_vfb(display)
     return props
 
 
@@ -1127,10 +1084,6 @@ cdef class RandRBindingsInstance(X11CoreBindingsInstance):
             XRRFreeMonitors(monitors)
         return True
 
-    def is_vfb(self) -> bool:
-        self.context_check("is_vfb")
-        return is_vfb(self.display)
-
     def get_monitor_properties(self) -> Dict[str, Any]:
         self.context_check("get_monitor_properties")
         return monitor_properties(self.display)
@@ -1212,7 +1165,7 @@ cdef class RandRBindingsInstance(X11CoreBindingsInstance):
                     if crtc_info.noutput==0 or crtc_info.mode==0:
                         #this crtc is disabled
                         continue
-                    if crtc_info.noutput!=1 or i>=rsc.noutput or crtc_info.outputs[0]!=rsc.outputs[i]:
+                    if crtc_info.noutput!=1 or crtc_info.outputs[0]!=rsc.outputs[i]:
                         #`set_crtc_config` always drives output `i` with crtc `i`
                         return {}
                     hz = 0
@@ -1394,13 +1347,20 @@ cdef class RandRBindingsInstance(X11CoreBindingsInstance):
                         continue
                     noutput = 1
                     mode = 0
+                    vrefresh = 0
                     hz = 60.0
                     x, y, width, height = 0, 0, 1024, 768
                     if m:
                         if m.get("primary", False):
                             primary = i
                         x, y, width, height = m["geometry"]
-                        hz = vrefresh_hz_exact(m.get("refresh-rate", 0))
+                        vrefresh = m.get("refresh-rate", 0)
+                        if vrefresh <= 0:
+                            vrefresh = DEFAULT_REFRESH_RATE
+                        if vrefresh < 1000:
+                            hz = vrefresh
+                        else:
+                            hz = vrefresh / 1000
                         hzstr = str(hz)
                         if hzstr.find(".") > 0:
                             hzstr = hzstr.rstrip("0").rstrip(".")

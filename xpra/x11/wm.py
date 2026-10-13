@@ -4,6 +4,7 @@
 # Xpra is released under the terms of the GNU GPL v2, or, at your option, any
 # later version. See the file COPYING for details.
 
+import os
 from typing import Any, Final
 
 from xpra.util.env import envbool
@@ -118,7 +119,10 @@ class Wm(GObject.GObject):
         # else steals it, then we should exit.
 
         # Become the Official Window Manager of this year's display:
-        self._wm_selection = ManagerSelection("WM_S0", "_NET_WM_CM_S0")
+        screen_num = int(os.environ.get("DESKTOP_SCREEN", "0"))
+        wm_sel = f"WM_S{screen_num}"
+        cm_sel = f"_NET_WM_CM_S{screen_num}"
+        self._wm_selection = ManagerSelection(wm_sel, cm_sel)
         self._wm_selection.connect("selection-lost", self._lost_wm_selection)
         self._wm_selection.connect("selection-acquired", self._got_wm_selection)
         # May throw AlreadyOwned:

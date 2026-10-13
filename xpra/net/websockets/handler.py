@@ -28,7 +28,7 @@ class WebSocketRequestHandler(HTTPRequestHandler):
 
     def __init__(self, sock, addr, new_websocket_client,
                  web_root="/usr/share/xpra/www/",
-                 http_headers_dirs: Sequence[str] = ("/etc/xpra/http-headers",),
+                 http_headers_dir="/etc/xpra/http-headers",
                  script_paths: dict[str, Callable[[str], HttpResponse]] = None,
                  redirect_https=False,
                  username=AUTH_USERNAME,
@@ -39,7 +39,7 @@ class WebSocketRequestHandler(HTTPRequestHandler):
         self.redirect_https = redirect_https
         self.finish = self.finish_and_close
         super().__init__(sock, addr,
-                         web_root, http_headers_dirs, script_paths,
+                         web_root, http_headers_dir, script_paths,
                          username, password)
 
     def handle_websocket(self) -> None:
@@ -55,8 +55,7 @@ class WebSocketRequestHandler(HTTPRequestHandler):
         if ver not in SUPPORT_HyBi_PROTOCOLS:
             raise ValueError(f"Unsupported protocol version {ver}")
 
-        # browsers separate the protocols with ", ":
-        protocols = [protocol.strip() for protocol in self.headers.get("Sec-WebSocket-Protocol", "").split(",")]
+        protocols = self.headers.get("Sec-WebSocket-Protocol", "").split(",")
         if "binary" not in protocols:
             raise ValueError("client does not support 'binary' protocol")
 
@@ -74,16 +73,7 @@ class WebSocketRequestHandler(HTTPRequestHandler):
             b"",
             b"",
         )
-        try:
-            self.new_websocket_client(self)
-        except Exception as e:
-            # the upgrade response has already been sent,
-            # so we can't reply with an http error without corrupting the websocket stream:
-            log("new_websocket_client(%s)", self, exc_info=True)
-            log.error("Error: failed to start the websocket connection:")
-            log.estr(e)
-            self.close_connection = True
-            return
+        self.new_websocket_client(self)
         # don't use our finish method that closes the socket,
         # but do call the superclass's finish() method:
         self.finish = super().finish

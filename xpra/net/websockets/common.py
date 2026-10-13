@@ -14,7 +14,6 @@ from enum import IntEnum
 from collections.abc import Callable
 from importlib import import_module
 
-from xpra.net.common import ConnectionClosedException
 from xpra.util.str_fn import strtobytes
 from xpra.log import Logger
 
@@ -106,38 +105,21 @@ def write_request(write: Callable, http_request) -> None:
         elapsed = monotonic() - now
         if elapsed >= MAX_WRITE_TIME:
             raise RuntimeError(f"http write timeout, took more {elapsed:.1f} seconds")
-        try:
-            w = write(http_request)
-        except TimeoutError:
-            raise TimeoutError(f"http write timeout, took more {monotonic() - now:.1f} seconds") from None
+        w = write(http_request)
         http_request = http_request[w:]
 
 
 def read_server_upgrade(read: Callable) -> dict[str, str]:
     now = monotonic()
     response = b""
-    # read until the end of the headers, whatever the response is:
-    while b"\r\n\r\n" not in response:
-        elapsed = monotonic() - now
-        if elapsed >= MAX_READ_TIME:
-            raise TimeoutError(f"http read timeout, the websocket upgrade response is incomplete after {elapsed:.1f} seconds")
-        try:
-            data = read(READ_CHUNK_SIZE)
-        except TimeoutError:
-            what = "incomplete" if response else "no"
-            raise TimeoutError(f"http read timeout, {what} websocket upgrade response after {monotonic() - now:.1f} seconds") from None
-        if not data:
-            raise ConnectionClosedException("the server closed the connection during the websocket upgrade")
-        response += data
-    headers = parse_response_header(response)
-    status = response.split(b"\r\n", 1)[0].decode("latin1")
-    parts = status.split(" ", 2)
-    if len(parts) < 2 or not parts[0].startswith("HTTP/"):
-        raise ValueError(f"invalid http response: {status!r}")
-    # authentication failures are reported by `verify_response_headers`:
-    if parts[1] != "101" and "www-authenticate" not in headers:
-        raise ValueError(f"websocket upgrade failed: {status!r}")
-    return headers
+
+    def hasheader(k) -> bool:
+        return k in parse_response_header(response)
+
+    while monotonic() - now < MAX_READ_TIME and not (
+            hasheader("sec-websocket-protocol") or hasheader("www-authenticate")):
+        response += read(READ_CHUNK_SIZE)
+    return parse_response_header(response)
 
 
 def parse_response_header(response: bytes) -> dict[str, str]:

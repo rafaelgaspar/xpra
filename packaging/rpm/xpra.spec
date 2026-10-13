@@ -79,7 +79,7 @@ autoprov: no
 %endif
 
 Name:				%{package_prefix}
-Version:			6.5.5
+Version:			6.5.4
 # this problematic flag is forced upon us by Fedora:
 # https://github.com/Xpra-org/xpra/issues/4706
 Epoch:				1
@@ -398,8 +398,6 @@ Summary:			GTK3 xpra client
 Provides:           %{package_prefix}-client-gtk3
 Requires:			%{package_prefix}-client = %{version}-%{release}
 Requires:			gtk3
-# the Gtk typelibs need the cairo typelib, which nothing else pulls in since glib 2.80:
-Requires:			gobject-introspection
 Requires:           %{py3rpmname}-cairo
 Requires(post):     coreutils
 Requires(postun):   gtk-update-icon-cache
@@ -548,8 +546,6 @@ Recommends:			%{py3rpmname}-cups
 Recommends:			dbus-x11
 Recommends:			%{py3rpmname}-setproctitle
 Recommends:			librsvg2
-# the Rsvg typelib needs the cairo typelib, which nothing else pulls in since glib 2.80:
-Requires:			gobject-introspection
 Recommends:			ibus
 Recommends:			%{py3rpmname}-pyxdg
 Recommends:         %{py3rpmname}-watchdog
@@ -1115,95 +1111,6 @@ fi
 
 
 %changelog
-* Sun Oct 11 2026 Antoine Martin <antoine@xpra.org> 6.5.5-10
-- 🔧 Platforms, build and packaging:
-   Debian dropped clang-19
-   verify deb packages before copying to the repo
-   remove `openat2` qemu workarounds
-   missing RPM dependencies for cairo
-- macOS notarization and build fixes:
-   missing entry point and helper and command path for light builds
-   codesign for light builds
-   notarization + missing script
-- Major:
-   drag-and-drop can get wedged and stop working
-   scroll event regression introduced in 6.5.4
-   don't let the child reaper turn a failed exec auth into a success
-   don't crash if `dbus-deamon` cannot be started
-   don't load X11 bindings under Wayland
-   session sharing can cause threading issues
-   acknowledge pending window damage correctly on connection cleanup
-   workaround window managers that don't deiconify windows
-   desktop scaling misplaces relative windows
-   XSETTINGS / DPI fix
-- Keyboard:
-   keyboard layout group sticks
-   aliased key name levels
-   map missing keysyms without removing others
-- SSL:
-   ssl upgrade must override defaults
-   ssl upgrade failed
-   ssl retry needs a brand new socket
-   download ssl certificate using the same connection path, same configuration options
-   warn when the certificate no longer matches the one accepted previously
-   don't wait forever for the client's TLS handshake to complete
-   don't let SSL connections wait past their deadline
-   apply a timeout to every TLS handshake
-   fail the SSL handshake when the peer closes the connection
-   close the ssl connection when the server side handshake fails
-   don't confuse peek vs ssl peek data
-   handle connection closure during the client SSL upgrade
-   exit cleanly when the client SSL upgrade fails
-- 🖧 Network:
-   exceptions may not have arguments
-   don't block forever on a websocket upgrade that never completes
-   don't leak the client socket when the tcp connection setup fails
-   don't busy-loop when the server closes the connection during the websocket upgrade
-   limit the time clients have to send their http request
-   stop reading the websocket upgrade response at the end of its headers
-   check the http status of the websocket upgrade response
-   don't send an http error after the websocket upgrade response
-   accept websocket subprotocol lists with spaces
-   return the peeked data to the http request reader
-   fix default HTTP headers directory for WebSocket errors
-   proxied connections failed
-   socket leaks when the proxy connection fails
-   don't forward the ssh agent on MS Windows
-- 📋 Clipboard:
-   fail the requests waiting on an incremental transfer which times out
-   give incremental transfers longer than `CONVERT_TIMEOUT` to complete
-   avoid unnecessary macOS JPEG targets and safely convert transparent clipboard images
-   test must wait for synchronization to occur
-   test all selections
-   detailed test errors
-   honour debugging flag in tests
-   the gtk client can use the X11 bindings when running on an X11 display
-   the GTK clipboard must always be greedy
-- Minor:
-   apply the new DPI before resizing the display
-   don't leave `_NET_ACTIVE_WINDOW` pointing at a window that is gone
-   avoid repeated pointer position updates when the pointer is unchanged
-   uinput device matching
-   track windows reusing a group leader - so we don't remove it
-   don't hold on to an encoder that has been replaced or closed
-   prevent UI thread watcher race conditions
-   missing lz4 flag could cause errors
-   out of bounds access when comparing monitor configurations
-   don't add resolutions to real GPUs
-   don't create a second dbus machine-id
-   a read-only filesystem is not writable
-   don't busy wait for X11 server
-   server window model not updating workspace value
-   missing window border when window is in alert state
-   border painted at an offset when sharing the session
-- 💄 Cosmetic:
-   Gtk clipboard logs errors on timeouts
-   geometry debug logging can cause errors
-   restack debug labels are inverted
-   indentation
-   share the refresh-rate convertion
-   document limitations of cert data authenticity with older Python versions
-   don't warn about power events when there is no system bus
 * Sun Sep 27 2026 Antoine Martin <antoine@xpra.org> 6.5.4-10
 - 🔧 Platforms, build and packaging:
    `libyuv` not detected without pkgconfig file + fixup

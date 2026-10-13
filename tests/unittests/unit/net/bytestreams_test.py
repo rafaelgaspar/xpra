@@ -141,17 +141,6 @@ class TestSocketPeekWrapper(unittest.TestCase):
         assert data == b"data"
         mock_sock.recv.assert_called_once_with(4, 0)
 
-    def test_request_reader_sees_peeked_data(self):
-        # the http request handler must see the data that was peeked before the upgrade:
-        from xpra.net.http.handler import RequestReader
-        wrapper, mock_sock = self._make(b"GET / HTTP/1.1\r\n\r\n")
-        mock_sock.gettimeout.return_value = None
-        rfile = io.BufferedReader(RequestReader(wrapper, 10))
-        assert rfile.readline() == b"GET / HTTP/1.1\r\n"
-        assert rfile.readline() == b"\r\n"
-        mock_sock.recv.assert_not_called()
-        mock_sock.recv_into.assert_not_called()
-
     def test_makefile_read_mode_returns_peek_file(self):
         from xpra.net.bytestreams import SocketPeekFile
         wrapper, mock_sock = self._make(b"peeked")
@@ -275,16 +264,6 @@ class TestSSLSocketConnection(unittest.TestCase):
         e = OSError(104, "Connection reset by peer")
         with self.assertRaises(ConnectionClosedException):
             conn.can_retry(e)
-
-    def test_can_retry_empty_args(self):
-        # exceptions raised without arguments must not be masked by an `IndexError`:
-        conn = self._make_conn()
-        for e in (OSError(), ConnectionResetError(), TimeoutError(), Exception()):
-            assert not e.args
-            if isinstance(e, TimeoutError):
-                assert conn.can_retry(e)
-            else:
-                assert conn.can_retry(e) is False, type(e)
 
     # read ---
 

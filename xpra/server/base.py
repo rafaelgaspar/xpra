@@ -308,6 +308,9 @@ class ServerBase(ServerBaseClass):
             log.warn(f" in the Xpra server session {server_uuid!r}")
         return True
 
+    def update_all_server_settings(self, reset: bool = False) -> None:
+        pass  # may be overridden in subclasses (ie: x11 server)
+
     ######################################################################
     # hello:
     def get_server_features(self, server_source=None) -> dict[str, Any]:
@@ -473,28 +476,16 @@ class ServerBase(ServerBaseClass):
 
         remaining_sources = tuple(self._server_sources.values())
         if self.ui_driver == source.uuid:
-            # we may be running in the network thread,
-            # but the `new-ui-driver` handlers may access the display (ie: clipboard):
-            GLib.idle_add(self.replace_ui_driver, source.uuid)
+            if len(remaining_sources) == 1:
+                self.set_ui_driver(remaining_sources[0])
+            else:
+                self.set_ui_driver(None)
         source.close()
         netlog("cleanup_source(%s) remaining sources: %s", source, remaining_sources)
         netlog.info("%s client %i disconnected.", ptype, source.counter)
         has_client = len(remaining_sources) > 0
         if not has_client:
             GLib.idle_add(self.last_client_exited)
-
-    def replace_ui_driver(self, uuid: str) -> None:
-        """ the client that was driving the session has gone,
-            hand it over to the remaining client if there is only one """
-        if self.ui_driver != uuid:
-            log("replace_ui_driver(%s) another client has taken over: %s", uuid, self.ui_driver)
-            return
-        remaining_sources = tuple(self._server_sources.values())
-        if any(ss.uuid == uuid for ss in remaining_sources):
-            # the same client has already reconnected:
-            log("replace_ui_driver(%s) client has reconnected", uuid)
-            return
-        self.set_ui_driver(remaining_sources[0] if len(remaining_sources) == 1 else None)
 
     def last_client_exited(self) -> None:
         # must run from the UI thread (modifies focus and keys)

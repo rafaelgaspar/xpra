@@ -8,7 +8,6 @@ import sys
 import os
 import errno
 import socket
-from time import monotonic
 from typing import Any
 from collections.abc import Callable
 
@@ -68,9 +67,7 @@ def can_retry(e) -> bool | str:
     if isinstance(e, BrokenPipeError):
         raise ConnectionClosedException(e) from None
     if isinstance(e, OSError):
-        # exceptions can be raised without any arguments,
-        # these are re-raised as-is instead of being masked by an `IndexError`:
-        code = e.args[0] if e.args else None
+        code = e.args[0]
         abort = ABORT.get(code, code)
         if abort is not None:
             err = getattr(e, "errno", None)
@@ -123,8 +120,6 @@ class Connection:
         self.filename = None  # only used for unix domain sockets!
         self.active = True
         self.timeout = 0
-        # when set, blocking io calls are no longer retried past this `monotonic()` time:
-        self.deadline = 0.0
 
     def set_nodelay(self, nodelay: bool) -> None:
         """ TCP sockets override this method  """
@@ -144,14 +139,8 @@ class Connection:
     def can_retry(self, e) -> bool | str:
         return can_retry(e)
 
-    def can_retry_before_deadline(self, e) -> bool | str:
-        retry = self.can_retry(e)
-        if retry and self.deadline and monotonic() >= self.deadline:
-            return False
-        return retry
-
     def untilConcludes(self, *args):
-        return untilConcludes(self.is_active, self.can_retry_before_deadline, *args)
+        return untilConcludes(self.is_active, self.can_retry, *args)
 
     def peek(self, _n: int) -> bytes:
         # not implemented
@@ -629,7 +618,7 @@ class SSLSocketConnection(SocketConnection):
                 log("SSL library error, message: %r", reason)
                 return False
             log("SSL library exception: %s, reason=%r", e, reason)
-        message = e.args[0] if e.args else ""
+        message = e.args[0]
         if message in SSLSocketConnection.SSL_TIMEOUT_MESSAGES:
             log("SSL timeout will be retried, messsage: %r", message)
             return True

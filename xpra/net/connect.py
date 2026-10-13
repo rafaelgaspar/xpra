@@ -127,63 +127,40 @@ def connect_to_tcp(display_desc: dict[str, Any]):
     display_name = display_desc["display_name"]
     timeout = display_desc.get("timeout", SOCKET_TIMEOUT)
     sock = retry_socket_connect(display_desc)
-    try:
-        # use non-blocking until the connection is finalized
-        sock.settimeout(0.1)
-        conn = SocketConnection(sock, sock.getsockname(), sock.getpeername(), display_name,
-                                dtype, socket_options=display_desc)
+    # use non-blocking until the connection is finalized
+    sock.settimeout(0.1)
+    conn = SocketConnection(sock, sock.getsockname(), sock.getpeername(), display_name,
+                            dtype, socket_options=display_desc)
 
-        if dtype in ("ssl", "wss"):
-            raw_sock = sock
-            from xpra.net.tls.socket import ssl_handshake, ssl_wrap_socket
-            # convert option names to function arguments:
-            ssl_options = {k.replace("-", "_"): v for k, v in display_desc.get("ssl-options", {}).items()}
-            try:
-                sock = ssl_wrap_socket(sock, **ssl_options)
-            except ValueError as e:
-                raise InitExit(ExitCode.SSL_FAILURE, f"ssl setup failed: {e}")
-            if not sock:
-                raw_sock.close()
-                raise RuntimeError(f"failed to wrap socket {raw_sock} as {dtype!r}")
-            ssl_handshake(sock, timeout)
-            conn._socket = sock
-            conn.timeout = timeout
+    if dtype in ("ssl", "wss"):
+        raw_sock = sock
+        from xpra.net.tls.socket import ssl_handshake, ssl_wrap_socket
+        # convert option names to function arguments:
+        ssl_options = {k.replace("-", "_"): v for k, v in display_desc.get("ssl-options", {}).items()}
+        try:
+            sock = ssl_wrap_socket(sock, **ssl_options)
+        except ValueError as e:
+            raise InitExit(ExitCode.SSL_FAILURE, f"ssl setup failed: {e}")
+        if not sock:
+            raise RuntimeError(f"failed to wrap socket {raw_sock} as {dtype!r}")
+        ssl_handshake(sock)
+        conn._socket = sock
+        conn.timeout = timeout
 
-        # wrap in a websocket:
-        if dtype in ("ws", "wss"):
-            host = display_desc["host"]
-            port = display_desc.get("port", 0)
-            # do the websocket upgrade and switch to binary
-            try:
-                from xpra.net.websockets.common import client_upgrade, MAX_READ_TIME, MAX_WRITE_TIME
-            except ImportError as e:  # pragma: no cover
-                raise InitExit(ExitCode.UNSUPPORTED, f"cannot handle websocket connection: {e}") from None
-            else:
-                display_path = display_desc_to_display_path(display_desc)
-                # without a deadline, the socket timeouts are retried for as long as the connection is active,
-                # so a server that never responds would block us forever:
-                conn.deadline = monotonic() + MAX_WRITE_TIME + MAX_READ_TIME
-                try:
-                    if dtype == "wss":
-                        # Unlike the plain TCP socket, the TLS socket is blocking after
-                        # the handshake. Keep each SSL read or write within the deadline.
-                        sock.settimeout(0.1)
-                    client_upgrade(conn.read, conn.write, host, port, display_path)
-                finally:
-                    conn.deadline = 0
-                    if dtype == "wss":
-                        sock.settimeout(None)
-        conn.target = get_host_target_string(display_desc)
-        return conn
-    except BaseException:
-        # don't leak the socket when connection setup fails;
-        # `sock` is the wrapped SSL socket if wrapping succeeded.
-        if sock:
-            try:
-                sock.close()
-            except OSError as e:
-                debug("failed to close %s: %s", sock, e)
-        raise
+    # wrap in a websocket:
+    if dtype in ("ws", "wss"):
+        host = display_desc["host"]
+        port = display_desc.get("port", 0)
+        # do the websocket upgrade and switch to binary
+        try:
+            from xpra.net.websockets.common import client_upgrade
+        except ImportError as e:  # pragma: no cover
+            raise InitExit(ExitCode.UNSUPPORTED, f"cannot handle websocket connection: {e}") from None
+        else:
+            display_path = display_desc_to_display_path(display_desc)
+            client_upgrade(conn.read, conn.write, host, port, display_path)
+    conn.target = get_host_target_string(display_desc)
+    return conn
 
 
 def connect_to_socket(display_desc: dict[str, Any]):
@@ -391,19 +368,14 @@ def proxy_connect(options: dict):
     }.get(ptype, socks.SOCKS5)
     if not proxy_type:
         raise InitExit(ExitCode.UNSUPPORTED, f"unsupported proxy type {ptype!r}")
-    proxy_host = to.strget("proxy-host")
-    proxy_port = to.intget("proxy-port", 1080)
+    host = to.strget("proxy-host")
+    port = to.intget("proxy-port", 1080)
     rdns = to.boolget("proxy-rdns", True)
     username = to.strget("proxy-username")
     password = to.strget("proxy-password")
     timeout = to.intget("timeout", CONNECT_TIMEOUT)
     sock = socks.socksocket()
-    sock.set_proxy(proxy_type, proxy_host, proxy_port, rdns, username, password)
+    sock.set_proxy(proxy_type, host, port, rdns, username, password)
     sock.settimeout(timeout)
-    # the destination, which the proxy connects to for us:
-    try:
-        sock.connect((to.strget("host"), to.intget("port")))
-    except BaseException:
-        sock.close()
-        raise
+    sock.connect((host, port))
     return sock

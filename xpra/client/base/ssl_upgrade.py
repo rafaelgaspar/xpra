@@ -8,7 +8,6 @@ from xpra.net.common import Packet
 from xpra.util.thread import start_thread
 from xpra.util.objects import typedict
 from xpra.exit_codes import ExitCode
-from xpra.scripts.config import InitExit
 from xpra.log import Logger
 
 log = Logger("ssl")
@@ -40,9 +39,10 @@ class SSLUpgradeClient(StubClientMixin):
         self.send("ssl-upgrade", {})
         from xpra.net.tls.socket import ssl_handshake, ssl_wrap_socket
         from xpra.net.tls.file import get_ssl_attributes
-        from xpra.net.tls.common import SSL_UPGRADE_DEFAULTS
-        # the "ssl-options" from `get_ssl_options` already default to `SSL_UPGRADE_DEFAULTS`:
-        overrides = dict(SSL_UPGRADE_DEFAULTS)
+        overrides = {
+            "verify_mode": "none",
+            "check_hostname": "no",
+        }
         overrides.update(conn.options.get("ssl-options", {}))
         ssl_options = get_ssl_attributes(None, False, overrides)
         kwargs = {k.replace("-", "_"): v for k, v in ssl_options.items()}
@@ -63,21 +63,8 @@ class SSLUpgradeClient(StubClientMixin):
             self.quit(ExitCode.INTERNAL_ERROR)
             # noinspection PyUnreachableCode
             return
-        ssl_sock = None
-        try:
-            ssl_sock = ssl_wrap_socket(conn._socket, **kwargs)
-            if not ssl_sock:
-                # `None` means the server closed the connection during the TLS setup:
-                raise InitExit(ExitCode.SSL_FAILURE, "the connection was closed")
-            ssl_handshake(ssl_sock)
-        except Exception as e:
-            log("ssl_upgrade(%s)", ssl_attrs, exc_info=True)
-            log.error("Error: ssl upgrade failed")
-            log.estr(e)
-            # once wrapped, the ssl socket owns the file descriptor:
-            (ssl_sock or conn).close()
-            self.quit(e.status if isinstance(e, InitExit) else ExitCode.SSL_FAILURE)
-            return
+        ssl_sock = ssl_wrap_socket(conn._socket, **kwargs)
+        ssl_handshake(ssl_sock)
         log("ssl handshake complete")
         from xpra.net.bytestreams import SSLSocketConnection
         ssl_conn = SSLSocketConnection(ssl_sock, conn.local, conn.remote, conn.endpoint, new_socktype)

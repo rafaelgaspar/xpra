@@ -1107,7 +1107,7 @@ class GTKXpraClient(GObjectClientAdapter, UIXpraClient):
         window = self.get_window(wid)
         other_window = self._id_to_window.get(other_wid)
         focuslog("restack window %s - %s %s %s",
-                 wid, window, ["below", "above"][above], other_window)
+                 wid, window, ["above", "below"][above], other_window)
         if window:
             window.restack(other_window, above)
 
@@ -1429,9 +1429,6 @@ class GTKXpraClient(GObjectClientAdapter, UIXpraClient):
         log(f"get_group_leader: refkey={refkey}, metadata={metadata}, refs={self._ref_to_group_leader}")
         if group_leader_window := self._ref_to_group_leader.get(refkey):
             log("found existing group leader window %s using ref=%s", group_leader_window, refkey)
-            wids = self._group_leader_wids.setdefault(group_leader_window, [])
-            if wid not in wids:
-                wids.append(wid)
             return group_leader_window
         # we need to create one:
         title = "%s group leader for window %s" % (self.session_name or "Xpra", wid)

@@ -20,7 +20,7 @@ from xpra.server.keyboard_config_base import KeyboardConfigBase
 from xpra.x11.xkbhelper import (
     do_set_keymap, set_all_keycodes, set_keycode_translation,
     get_modifiers_from_meanings, get_modifiers_from_keycodes,
-    clear_modifiers, set_modifiers, map_missing_modifiers, map_missing_keysyms,
+    clear_modifiers, set_modifiers, map_missing_modifiers,
     clean_keyboard_state, get_keycode_mappings, get_keyval_mappings, canonical_keysym,
     DEBUG_KEYSYMS, grok_modifier_map,
 )
@@ -445,7 +445,6 @@ class KeyboardConfig(KeyboardConfigBase):
                     # (used by non X11 clients like osx,win32 or HTML5)
                     # (do not merge with the previous translation table:
                     # `do_set_keymap` has just replaced the keymap it was built from)
-                    map_missing_keysyms(self.keycodes)
                     self.keycode_translation = set_keycode_translation(self.x11_keycodes, self.keycodes)
                 else:
                     self.keycode_translation = {}
@@ -567,12 +566,10 @@ class KeyboardConfig(KeyboardConfigBase):
         if self.raw:
             return client_keycode, group
         log("do_get_keycode has x11: %s, client_keycode=%s", bool(self.x11_keycodes), client_keycode)
-        # the client may know this keysym by another name - ie: `Page_Up` for `Prior`,
-        # or `dead_perispomeni` for `dead_tilde`, but the levels are recorded using the server's name:
-        canonical = canonical_keysym(keyname)
         if self.x11_keycodes and client_keycode > 0:
             keycode = self.keycode_translation.get((client_keycode, keyname), 0) or client_keycode
             keysyms = self.keycode_mappings.get(keycode, ())
+            canonical = canonical_keysym(keyname)
             if keyname in keysyms or canonical in keysyms:
                 kmlog(keyname, "do_get_keycode (%i, %s)=%s (native keymap)", client_keycode, keyname, keycode)
                 return keycode, group
@@ -580,10 +577,14 @@ class KeyboardConfig(KeyboardConfigBase):
                   "native keycode %i resolved to %i with keysyms=%s; matching by keysym instead",
                   client_keycode, keycode, keysyms)
             return self.find_matching_keycode(client_keycode, canonical, pressed, modifiers, keyval, keystr, group)
-        keycode, rgroup = self.find_matching_keycode(client_keycode, canonical, pressed, modifiers, keyval, keystr, group)
-        if keycode < 0 and canonical != keyname:
-            kmlog(keyname, "do_get_keycode: trying the client's keysym name %r", keyname)
-            keycode, rgroup = self.find_matching_keycode(client_keycode, keyname, pressed, modifiers, keyval, keystr, group)
+        keycode, rgroup = self.find_matching_keycode(client_keycode, keyname, pressed, modifiers, keyval, keystr, group)
+        if keycode < 0 and keyname:
+            # the client may know this keysym by another name - ie: `Page_Up` for `Prior`:
+            canonical = canonical_keysym(keyname)
+            if canonical != keyname:
+                kmlog(keyname, "do_get_keycode: trying canonical keysym name %r", canonical)
+                keycode, rgroup = self.find_matching_keycode(client_keycode, canonical,
+                                                             pressed, modifiers, keyval, keystr, group)
         return keycode, rgroup
 
     def find_matching_keycode(self, client_keycode: int, keyname: str,

@@ -22,7 +22,7 @@ from xpra.scripts.session import (
     get_session_dir, make_session_dir, session_file_path,
     load_session_file, save_session_file
 )
-from xpra.util.io import info, warn, error, wait_for_socket, which
+from xpra.util.io import info, warn, wait_for_socket, which
 from xpra.util.parsing import parse_str_dict, FALSE_OPTIONS, ALL_BOOLEAN_OPTIONS, str_to_bool, parse_bool_or, \
     parse_resolutions, get_refresh_rate_for_value
 from xpra.scripts.parsing import fixup_defaults, MODE_ALIAS
@@ -501,52 +501,25 @@ def trymkdir(path: str, mode=0o755) -> None:
             warn(f"Warning: failed to create {path!r} {e}")
 
 
-def ensure_machine_id() -> None:
-    # dbus reads `/var/lib/dbus/machine-id` and falls back to `/etc/machine-id`,
-    # so we only create one if neither exists, otherwise we would end up with two different ids:
-    ETC_MACHINE_ID: Final[str] = "/etc/machine-id"
-    DBUS_MACHINE_ID: Final[str] = "/var/lib/dbus/machine-id"
-    from xpra.util.io import load_binary_file
-    machine_ids = {filename: load_binary_file(filename).strip() for filename in (ETC_MACHINE_ID, DBUS_MACHINE_ID)}
-    found = {mid for mid in machine_ids.values() if mid}
-    if len(found) > 1:
-        warn(f"Warning: {ETC_MACHINE_ID!r} and {DBUS_MACHINE_ID!r} do not match")
-    if found:
-        return
-    import uuid
-    machine_id = uuid.uuid4().hex
-    for filename in (ETC_MACHINE_ID, DBUS_MACHINE_ID):
-        try:
-            trymkdir(os.path.dirname(os.path.dirname(filename)))
-            trymkdir(os.path.dirname(filename))
-            with open(filename, "w") as f:
-                f.write(machine_id + "\n")
-            warn(f"initialized machine-id {machine_id} in {filename!r}")
-            return
-        except OSError as e:
-            warn(f"unable to create {filename!r}: {e}")
-
-
 def start_dbus() -> None:
     ROOT: bool = POSIX and getuid() == 0
     SYSTEM_DBUS = envbool("XPRA_SYSTEM_DBUS", ROOT)
     SYSTEM_DBUS_TIMEOUT = envint("XPRA_SYSTEM_DBUS_TIMEOUT", 5)
+    MACHINE_ID: Final[str] = "/var/lib/dbus/machine-id"
     if SYSTEM_DBUS and not wait_for_socket(SYSTEM_DBUS_SOCKET, SYSTEM_DBUS_TIMEOUT):
-        ensure_machine_id()
+        if not os.path.exists(MACHINE_ID):
+            try:
+                trymkdir("/var/lib")
+                trymkdir("/var/lib/dbus")
+                import uuid
+                machine_id = uuid.uuid4().hex
+                with open(MACHINE_ID, "w") as f:
+                    f.write(machine_id)
+                warn(f"initialized dbus machine_id {machine_id}\n")
+            except OSError as e:
+                warn(f"unable to create machine_id: {e}\n")
         trymkdir("/run/dbus")
-        dbus_daemon = which("dbus-daemon")
-        if not dbus_daemon:
-            error("Error: unable to start the system dbus daemon")
-            error(" `dbus-daemon` command not found")
-            error(" install dbus, or use `XPRA_SYSTEM_DBUS=0` to skip it")
-            return
-        try:
-            Popen([dbus_daemon, "--system", "--fork"]).wait()
-        except OSError as e:
-            error("Error: failed to start the system dbus daemon")
-            error(f" {e}")
-            error(" use `XPRA_SYSTEM_DBUS=0` to skip it")
-            return
+        Popen(["dbus-daemon", "--system", "--fork"]).wait()
         if not wait_for_socket(SYSTEM_DBUS_SOCKET, SYSTEM_DBUS_TIMEOUT):
             warn("dbus-daemon failed to start\n")
         else:

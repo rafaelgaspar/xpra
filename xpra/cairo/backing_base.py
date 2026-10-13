@@ -90,13 +90,10 @@ def cairo_paint_pointer_overlay(context, cursor_data, px: int, py: int, start_ti
         (context, x, y, start_time), alpha)
     bgra = memoryview_to_bytes(pixels)
     img = make_image_surface(Format.ARGB32, "BGRA", bgra, cw, ch, cw * 4)
-    # don't leak the translation and operator to whatever is painted next (ie: the border):
-    context.save()
     context.translate(x, y)
     context.set_source_surface(img, 0, 0)
     context.set_operator(Operator.OVER)
     context.paint_with_alpha(alpha)
-    context.restore()
 
 
 def get_scaling_filter(content_type: str, sx: float, sy: float):
@@ -492,8 +489,6 @@ class CairoBackingBase(WindowBackingBase):
 
     def cairo_draw_alert(self, context) -> None:
         if not self.alert_state:
-            # no alert, just the regular border:
-            self.cairo_draw_border(context, self.border)
             return
         if "shade" in ALERT_MODE:
             self.draw_alert_shade(context)

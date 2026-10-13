@@ -5,7 +5,7 @@
 
 import sys
 from time import monotonic
-from typing import Any, Sequence, NoReturn
+from typing import Sequence, NoReturn
 
 from xpra.common import noerr
 from xpra.exit_codes import ExitCode, ExitValue
@@ -28,11 +28,10 @@ SSL_VERIFY_CODES: dict[int, str] = {
 
 
 class SSLVerifyFailure(InitExit):
-    def __init__(self, status, msg, verify_code, cert_data=""):
+    def __init__(self, status, msg, verify_code, ssl_sock):
         super().__init__(status, msg)
         self.verify_code = verify_code
-        # the PEM certificate that failed verification, if we could get it:
-        self.cert_data = cert_data
+        self.ssl_sock = ssl_sock
 
 
 KEY_FILENAME = "key.pem"
@@ -45,13 +44,6 @@ SSL_ATTRIBUTES: Sequence[str] = (
     "check-hostname", "server-hostname",
     "options", "ciphers",
 )
-
-# connections that are upgraded to ssl opportunistically ("tcp" to "ssl", "ws" to "wss")
-# don't verify the server unless the user asks for it explicitly:
-SSL_UPGRADE_DEFAULTS: dict[str, Any] = {
-    "server-verify-mode": "none",
-    "check-hostname": False,
-}
 
 logger = None
 
