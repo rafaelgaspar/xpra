@@ -3,6 +3,10 @@ set -e
 
 PKG=xpra-rafaelgaspar-overlay
 PY_REL_PATHS="
+scripts/config.py
+scripts/parsing.py
+server/subsystem/command.py
+util/child_reaper.py
 x11/wm.py
 x11/shadow/backends.py
 x11/shadow/server.py
