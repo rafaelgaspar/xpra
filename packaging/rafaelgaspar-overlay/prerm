@@ -6,6 +6,11 @@ PY_REL_PATHS="
 scripts/config.py
 scripts/parsing.py
 server/subsystem/command.py
+server/source/client_connection.py
+server/source/encoding.py
+server/source/factory.py
+server/source/mmap.py
+server/source/stub.py
 util/child_reaper.py
 x11/wm.py
 x11/shadow/backends.py
