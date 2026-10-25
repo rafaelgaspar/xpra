@@ -24,6 +24,7 @@ install -d -m 0755 \
   "${PKG_ROOT}/usr/lib/python3/dist-packages/xpra/scripts" \
   "${PKG_ROOT}/usr/lib/python3/dist-packages/xpra/server/subsystem" \
   "${PKG_ROOT}/usr/lib/python3/dist-packages/xpra/server/source" \
+  "${PKG_ROOT}/usr/lib/python3/dist-packages/xpra/server/window" \
   "${PKG_ROOT}/usr/lib/python3/dist-packages/xpra/util" \
   "${PKG_ROOT}/usr/lib/python3/dist-packages/xpra/x11" \
   "${PKG_ROOT}/usr/lib/python3/dist-packages/xpra/x11/shadow" \
@@ -58,6 +59,8 @@ install -m 0644 "${REPO_ROOT}/xpra/server/source/mmap.py" \
   "${PKG_ROOT}/usr/lib/python3/dist-packages/xpra/server/source/mmap.py"
 install -m 0644 "${REPO_ROOT}/xpra/server/source/stub.py" \
   "${PKG_ROOT}/usr/lib/python3/dist-packages/xpra/server/source/stub.py"
+install -m 0644 "${REPO_ROOT}/xpra/server/window/video_compress.py" \
+  "${PKG_ROOT}/usr/lib/python3/dist-packages/xpra/server/window/video_compress.py"
 
 bundle_html5=0
 if [[ -n "${HTML5_TARBALL}" ]]; then

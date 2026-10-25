@@ -11,6 +11,7 @@ server/source/encoding.py
 server/source/factory.py
 server/source/mmap.py
 server/source/stub.py
+server/window/video_compress.py
 util/child_reaper.py
 x11/wm.py
 x11/shadow/backends.py
