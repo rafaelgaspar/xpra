@@ -23,6 +23,7 @@ install -d -m 0755 "${DEBIAN}"
 install -d -m 0755 \
   "${PKG_ROOT}/usr/lib/python3/dist-packages/xpra/scripts" \
   "${PKG_ROOT}/usr/lib/python3/dist-packages/xpra/server/subsystem" \
+  "${PKG_ROOT}/usr/lib/python3/dist-packages/xpra/server/source" \
   "${PKG_ROOT}/usr/lib/python3/dist-packages/xpra/util" \
   "${PKG_ROOT}/usr/lib/python3/dist-packages/xpra/x11" \
   "${PKG_ROOT}/usr/lib/python3/dist-packages/xpra/x11/shadow" \
@@ -47,6 +48,16 @@ install -m 0644 "${REPO_ROOT}/xpra/server/subsystem/command.py" \
   "${PKG_ROOT}/usr/lib/python3/dist-packages/xpra/server/subsystem/command.py"
 install -m 0644 "${REPO_ROOT}/xpra/util/child_reaper.py" \
   "${PKG_ROOT}/usr/lib/python3/dist-packages/xpra/util/child_reaper.py"
+install -m 0644 "${REPO_ROOT}/xpra/server/source/client_connection.py" \
+  "${PKG_ROOT}/usr/lib/python3/dist-packages/xpra/server/source/client_connection.py"
+install -m 0644 "${REPO_ROOT}/xpra/server/source/encoding.py" \
+  "${PKG_ROOT}/usr/lib/python3/dist-packages/xpra/server/source/encoding.py"
+install -m 0644 "${REPO_ROOT}/xpra/server/source/factory.py" \
+  "${PKG_ROOT}/usr/lib/python3/dist-packages/xpra/server/source/factory.py"
+install -m 0644 "${REPO_ROOT}/xpra/server/source/mmap.py" \
+  "${PKG_ROOT}/usr/lib/python3/dist-packages/xpra/server/source/mmap.py"
+install -m 0644 "${REPO_ROOT}/xpra/server/source/stub.py" \
+  "${PKG_ROOT}/usr/lib/python3/dist-packages/xpra/server/source/stub.py"
 
 bundle_html5=0
 if [[ -n "${HTML5_TARBALL}" ]]; then
