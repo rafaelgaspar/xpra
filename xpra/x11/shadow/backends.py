@@ -68,7 +68,7 @@ def setup_gstreamer_capture():
 
 
 def setup_xshm_capture():
-    XSHM = envbool("XPRA_SHADOW_XSHM", True)
+    XSHM = envbool("XPRA_XSHM", True)
     if not XSHM:
         return None
     try:
