@@ -414,6 +414,11 @@ class DisplayManager(StubServerMixin):
         monitors = attrs.dictget("monitors")
         if monitors:
             ss.set_monitors(monitors)
+        if desktop_size:
+            width, height = desktop_size
+            from xpra.server.subsystem.desktop_server_events import on_client_dimensions
+
+            on_client_dimensions(width, height)
         # the DPI must be updated before resizing, since it is used for the display's physical dimensions:
         dpi = 0
         dpi_caps = attrs.get("dpi")
