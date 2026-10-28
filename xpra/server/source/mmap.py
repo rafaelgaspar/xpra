@@ -79,10 +79,14 @@ class MMAP_Connection(StubClientConnection):
         self.mmap_write_area = None
 
     def cleanup(self) -> None:
-        clean_mmap_area(self.mmap_read_area)
+        read_area = self.mmap_read_area
         self.mmap_read_area = None
-        clean_mmap_area(self.mmap_write_area)
+        write_area = self.mmap_write_area
         self.mmap_write_area = None
+        # the encode thread may still be writing pixels into these areas,
+        # so they can only be unmapped once it has processed everything it was given:
+        self.call_in_encode_thread_at_end(clean_mmap_area, read_area)
+        self.call_in_encode_thread_at_end(clean_mmap_area, write_area)
 
     def mmap_path(self, filename: str, index: int) -> str:
         if len(self.mmap_filenames) == 1 and os.path.isdir(self.mmap_filenames[0]):
