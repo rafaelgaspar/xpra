@@ -4,6 +4,7 @@
 # Xpra is released under the terms of the GNU GPL v2, or, at your option, any
 # later version. See the file COPYING for details.
 
+import os
 from typing import Any, Final
 
 from xpra.util.env import envbool
@@ -72,6 +73,23 @@ WINDOW_TYPE_ATOMS = tuple(f"_NET_WM_WINDOW_TYPE{wtype}" for wtype in (
 rxid = get_root_xid()
 
 
+def _wm_selection_screen() -> int:
+    # ICCCM WM_S<N> is the X screen, not a virtual desktop.
+    # DESKTOP_SCREEN wins when set (multi-server pods that share one X display);
+    # otherwise take N from DISPLAY=:N.S.
+    raw = os.environ.get("DESKTOP_SCREEN", "").strip()
+    if raw:
+        return int(raw)
+    display = os.environ.get("DISPLAY", "")
+    host_screen = display.rsplit(":", 1)[-1]
+    if "." in host_screen:
+        try:
+            return int(host_screen.rsplit(".", 1)[-1])
+        except ValueError:
+            pass
+    return 0
+
+
 class Wm(GObject.GObject):
     __gsignals__ = {
         # Public use:
@@ -118,7 +136,10 @@ class Wm(GObject.GObject):
         # else steals it, then we should exit.
 
         # Become the Official Window Manager of this year's display:
-        self._wm_selection = ManagerSelection("WM_S0", "_NET_WM_CM_S0")
+        screen_num = _wm_selection_screen()
+        wm_sel = f"WM_S{screen_num}"
+        cm_sel = f"_NET_WM_CM_S{screen_num}"
+        self._wm_selection = ManagerSelection(wm_sel, cm_sel)
         self._wm_selection.connect("selection-lost", self._lost_wm_selection)
         self._wm_selection.connect("selection-acquired", self._got_wm_selection)
         # May throw AlreadyOwned:
