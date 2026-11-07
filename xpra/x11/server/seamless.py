@@ -662,8 +662,15 @@ class SeamlessServer(GObject.GObject, ServerBase):
         if self.last_raised != wid:
             self.last_raised = None
         if self._has_focus == wid:
-            # nothing to do!
-            return
+            window = self.get_window(wid)
+            if not window or self._x11_focus_is_on(window):
+                # nothing to do!
+                return
+            # Another X client took the input focus without telling us -- e.g.
+            # another seamless server on a different screen of the same X
+            # server, which shares one global focus with us. _has_focus is
+            # stale, so the client's refocus must go through.
+            focuslog("focus wid=%#x: X input focus moved elsewhere, taking it back", wid)
         self._focus_history.append(wid)
         hfid = self._has_focus
         had_focus = self._id_to_window.get(hfid)
@@ -703,6 +710,21 @@ class SeamlessServer(GObject.GObject, ServerBase):
 
     def get_focus(self) -> int:
         return self._has_focus
+
+    def _x11_focus_is_on(self, window) -> bool:
+        """Whether X's input focus really is on window (or one of its children)."""
+        X11Window = X11WindowBindings()
+        ours = {window.xid, getattr(window, "corral_xid", 0)} - {0}
+        with xswallow:
+            xid = X11Window.XGetInputFocus()[0]
+            # None and PointerRoot are 0 and 1; stop well before any sane depth
+            for _ in range(16):
+                if xid <= 1:
+                    return False
+                if xid in ours:
+                    return True
+                xid = X11Window.getParent(xid)
+        return False
 
     def _send_new_window_packet(self, window) -> None:
         self._do_send_new_window_packet(WINDOW_CREATE, window, window.get_property("geometry"))
