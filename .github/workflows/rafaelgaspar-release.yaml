@@ -92,8 +92,11 @@ jobs:
           html5_version="${html5_tag#v}"
           asset="xpra-html5-${html5_version}.tar.gz"
           mkdir -p ../dist
-          curl -fsSL --retry 5 --retry-all-errors -o "../dist/${asset}" \
-            "https://github.com/rafaelgaspar/xpra-html5/releases/download/${html5_tag}/${asset}"
+          staging="$(mktemp -d)"
+          mkdir -p "${staging}/xpra-html5-${html5_version}/html5"
+          cp -a html5/. "${staging}/xpra-html5-${html5_version}/html5/"
+          tar -czf "../dist/${asset}" -C "${staging}" "xpra-html5-${html5_version}"
+          rm -rf "${staging}"
           echo "base_tag=${base_tag}" >> "$GITHUB_OUTPUT"
           echo "html5_tag=${html5_tag}" >> "$GITHUB_OUTPUT"
           echo "html5_version=${html5_version}" >> "$GITHUB_OUTPUT"
