@@ -2,15 +2,30 @@
 # Resolve rafaelgaspar integration tag: v{upstream-base}-rafaelgaspar.{N} (N starts at 0).
 # Usage: resolve-integration-tag.sh <tag-glob> <tag-filter-regex> [base-tag]
 #
-# Pass [base-tag] from tag-bump (the upstream tag that was just restacked).
-# Inferring it with `git tag --merged HEAD` is wrong when checkout used the
-# triggering github.sha (the pre-rebuild rafaelgaspar tip).
+# Pass [base-tag] from tag-bump (upstream release tag, or v{ver}-main-{shortsha}
+# when tracks:main). Inferring with `git tag --merged HEAD` is wrong when checkout
+# used the triggering github.sha (the pre-rebuild rafaelgaspar tip).
 set -euo pipefail
 
 tag_glob="${1:?tag glob}"
 tag_filter="${2:?tag filter regex}"
 explicit_base="${3:-}"
 output="${GITHUB_OUTPUT:-/dev/stdout}"
+
+main_base_re='^v[0-9]+(\.[0-9]+)*-main-[0-9a-f]+$'
+
+package_upstream_version() {
+  local base=$1
+  if [[ $base =~ ^v([0-9]+(\.[0-9]+)*)-main-[0-9a-f]+$ ]]; then
+    printf '%s\n' "${BASH_REMATCH[1]}"
+    return 0
+  fi
+  if [[ $base =~ ^v([0-9]+)-main-[0-9a-f]+$ ]]; then
+    printf '%s\n' "${BASH_REMATCH[1]}"
+    return 0
+  fi
+  printf '%s\n' "${base#v}"
+}
 
 if [[ -n $explicit_base ]]; then
   base_tag=$explicit_base
@@ -33,10 +48,14 @@ else
   fi
 fi
 [[ -n "${base_tag}" ]] || { echo "No upstream base tag found on branch" >&2; exit 1; }
-if ! echo "${base_tag}" | grep -Eq "${tag_filter}"; then
+if [[ -n $explicit_base ]] && echo "${base_tag}" | grep -Eq "${main_base_re}"; then
+  :
+elif ! echo "${base_tag}" | grep -Eq "${tag_filter}"; then
   echo "error: base tag ${base_tag} does not match ${tag_filter}" >&2
   exit 1
 fi
+
+deb_upstream=$(package_upstream_version "${base_tag}")
 
 head_sha=$(git rev-parse HEAD)
 
@@ -49,6 +68,7 @@ while git rev-parse "${prefix}" >/dev/null 2>&1; do
       echo "tag=${prefix}"
       echo "integration_version=${prefix#v}"
       echo "base_tag=${base_tag}"
+      echo "package_upstream_version=${deb_upstream}"
       echo "skip_release=true"
     } >>"$output"
     exit 0
@@ -61,5 +81,6 @@ done
   echo "tag=${prefix}"
   echo "integration_version=${prefix#v}"
   echo "base_tag=${base_tag}"
+  echo "package_upstream_version=${deb_upstream}"
   echo "skip_release=false"
 } >>"$output"
