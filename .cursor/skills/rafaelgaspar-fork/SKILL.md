@@ -17,6 +17,8 @@ Shared workflow for the public application forks. Clone them under
 skills in `dot-cursor/` vendored onto forks as `.cursor/`). Per-fork remotes
 and tag filters: `members.yaml`.
 
+**Upstream PR test coverage:** [docs/feat-upstream-test-coverage.md](https://github.com/rafaelgaspar/fork-pack/blob/main/docs/feat-upstream-test-coverage.md) in fork-pack.
+
 | Fork | Upstream | Ships from `rafaelgaspar` |
 | --- | --- | --- |
 | [homepage](https://github.com/rafaelgaspar/homepage) | [gethomepage/homepage](https://github.com/gethomepage/homepage) | `ghcr.io/rafaelgaspar/homepage` |
@@ -97,6 +99,10 @@ squash-merge history on `rafaelgaspar`. Do **not** export patch tarballs — the
 fork image or release tag is the artifact.
 
 ## Upstream tag bump
+
+`members.yaml` sets **`tracks: tag`** (default) or **`tracks: main`** per fork.
+**tag** rebuilds onto the latest upstream release tag; **main** rebuilds onto the
+upstream default branch tip while publish tags still use the latest release tag.
 
 When upstream publishes a git tag **T** matching `tag_filter` in `members.yaml`
 (a GitHub Release is not required), the fork's thin tag-bump caller runs
