@@ -92,7 +92,7 @@ jobs:
           html5_version="${html5_tag#v}"
           asset="xpra-html5-${html5_version}.tar.gz"
           mkdir -p ../dist
-          curl -fsSL -o "../dist/${asset}" \
+          curl -fsSL --retry 5 --retry-all-errors -o "../dist/${asset}" \
             "https://github.com/rafaelgaspar/xpra-html5/releases/download/${html5_tag}/${asset}"
           echo "base_tag=${base_tag}" >> "$GITHUB_OUTPUT"
           echo "html5_tag=${html5_tag}" >> "$GITHUB_OUTPUT"
