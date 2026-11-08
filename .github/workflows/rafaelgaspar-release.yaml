@@ -59,8 +59,9 @@ jobs:
           ./.github/scripts/resolve-integration-tag.sh 'v*.*.*' '^v[0-9]+\.[0-9]+\.[0-9]+$' "${{ inputs.upstream_tag }}"
           integration_version=$(grep '^integration_version=' "$GITHUB_OUTPUT" | tail -1 | cut -d= -f2-)
           base_tag=$(grep '^base_tag=' "$GITHUB_OUTPUT" | tail -1 | cut -d= -f2-)
+          pkg_ver=$(grep '^package_upstream_version=' "$GITHUB_OUTPUT" | tail -1 | cut -d= -f2-)
           echo "deb_version=${integration_version}" >> "$GITHUB_OUTPUT"
-          echo "xpra_upstream_version=${base_tag#v}" >> "$GITHUB_OUTPUT"
+          echo "xpra_upstream_version=${pkg_ver:-${base_tag#v}}" >> "$GITHUB_OUTPUT"
 
       - name: Checkout xpra-html5 fork
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -134,6 +135,19 @@ jobs:
             echo "skip_release=${skip}"
           } >> "$GITHUB_OUTPUT"
 
+      - name: Map Debian version (main-line integrations)
+        id: debian_ver
+        run: |
+          set -euo pipefail
+          v="${{ steps.decide.outputs.deb_version }}"
+          if echo "$v" | grep -q '-main-'; then
+            deb=$(printf '%s' "$v" | sed -E 's/^([0-9]+(\.[0-9]+)*)-main-([0-9a-f]+)-rafaelgaspar\.([0-9]+)$/\1~main+\3.rafaelgaspar.\4/')
+            echo "debian_version=${deb}" >> "$GITHUB_OUTPUT"
+            echo "build_full=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "build_full=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build overlay deb
         run: |
           chmod +x ./packaging/rafaelgaspar-overlay/build-deb.sh
@@ -142,6 +156,16 @@ jobs:
             "${{ steps.release.outputs.xpra_upstream_version }}" \
             "${{ steps.html5.outputs.tarball }}" \
             "${{ steps.html5.outputs.base_tag }}"
+
+      - name: Build full xpra debs (tracks main)
+        if: steps.debian_ver.outputs.build_full == 'true'
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          chmod +x ./packaging/debian/build-rafaelgaspar-from-git.sh
+          ./packaging/debian/build-rafaelgaspar-from-git.sh \
+            "${{ steps.debian_ver.outputs.debian_version }}" \
+            "${{ steps.html5.outputs.tarball }}"
 
       - name: Create and push integration tag
         if: steps.decide.outputs.skip_release != 'true'
@@ -165,9 +189,14 @@ jobs:
           - HTML5 client tarball is published only on [rafaelgaspar/xpra-html5](https://github.com/rafaelgaspar/xpra-html5/releases/tag/${{ steps.html5.outputs.html5_tag }})
           EOF
           )
+          assets=("${DEB}")
+          if [ -f dist/debian/deb-manifest.txt ]; then
+            assets+=(dist/debian/*.deb)
+            assets+=(dist/debian/deb-manifest.txt)
+          fi
           gh release create "${TAG}" \
             --repo rafaelgaspar/xpra \
             --title "${TAG}" \
             --notes "${body}" \
             --target rafaelgaspar \
-            "${DEB}"
+            "${assets[@]}""
