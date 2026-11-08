@@ -15,7 +15,22 @@ output="${GITHUB_OUTPUT:-/dev/stdout}"
 if [[ -n $explicit_base ]]; then
   base_tag=$explicit_base
 else
-  base_tag=$(git tag -l "$tag_glob" --merged HEAD | grep -E "$tag_filter" | sort -V | tail -1)
+  base_tag=$(git tag -l "$tag_glob" --merged HEAD | grep -E "$tag_filter" | sort -V | tail -1 || true)
+  # stacks rebuilt onto upstream master (tracks: main) do not contain the
+  # latest upstream release tag in history; name releases like tag-bump does.
+  if [[ -z "${base_tag}" ]] && git remote get-url upstream >/dev/null 2>&1; then
+    base_tag=$(
+      git ls-remote --tags upstream "refs/tags/${tag_glob}" 2>/dev/null \
+        | awk -F/ '{print $3}' \
+        | sed 's/\^{}//' \
+        | grep -E "$tag_filter" \
+        | sort -V \
+        | tail -1
+    )
+  fi
+  if [[ -z "${base_tag}" ]]; then
+    base_tag=$(git tag -l "$tag_glob" | grep -E "$tag_filter" | sort -V | tail -1 || true)
+  fi
 fi
 [[ -n "${base_tag}" ]] || { echo "No upstream base tag found on branch" >&2; exit 1; }
 if ! echo "${base_tag}" | grep -Eq "${tag_filter}"; then

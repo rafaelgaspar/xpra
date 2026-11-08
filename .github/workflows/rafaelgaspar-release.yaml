@@ -81,7 +81,10 @@ jobs:
             git remote add upstream https://github.com/Xpra-org/xpra-html5.git
           fi
           git fetch --tags upstream
-          base_tag=$(git tag -l 'v[0-9]*' --merged HEAD | grep -E '^v[0-9]+$' | sort -V | tail -1)
+          tmp_out="$(mktemp)"
+          GITHUB_OUTPUT="$tmp_out" "$GITHUB_WORKSPACE/.github/scripts/resolve-integration-tag.sh" \
+            'v[0-9]*' '^v[0-9]+$' ''
+          base_tag=$(grep '^base_tag=' "$tmp_out" | tail -1 | cut -d= -f2-)
           [[ -n "${base_tag}" ]] || { echo "No upstream html5 base tag found"; exit 1; }
           html5_tag=$(git tag -l "${base_tag}-rafaelgaspar*" --points-at HEAD | sort -V | tail -1)
           [[ -n "${html5_tag}" ]] || { echo "No rafaelgaspar integration tag on xpra-html5 HEAD; release xpra-html5 first"; exit 1; }
