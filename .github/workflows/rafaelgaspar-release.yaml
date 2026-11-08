@@ -75,6 +75,7 @@ jobs:
         run: |
           set -euo pipefail
           cd xpra-html5-src
+          git fetch --tags origin
           if git remote get-url upstream >/dev/null 2>&1; then
             git remote set-url upstream https://github.com/Xpra-org/xpra-html5.git
           else
