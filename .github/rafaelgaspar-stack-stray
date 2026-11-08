@@ -1,0 +1,6 @@
+# feat/* branches kept on origin but excluded from tag-bump / rebuild stack
+# (upstream PR work; see feat-upstream/* for the same tips on master)
+feat/x11-shadow-dynamic-window-model
+feat/encode-queue-teardown
+feat/video-idle-reuse-encoder
+feat/multi-screen-pointer
