@@ -66,6 +66,10 @@ fi
 
 debuild -b -us -uc
 "${REPO_ROOT}/packaging/debian/verify-debs.sh" ../*.deb
+if [[ "${CODENAME}" == "forky" ]]; then
+  chmod +x "${REPO_ROOT}/packaging/debian/verify-forky-package-depends.sh"
+  "${REPO_ROOT}/packaging/debian/verify-forky-package-depends.sh" ../*.deb
+fi
 
 shopt -s nullglob
 for deb in ../*.deb; do

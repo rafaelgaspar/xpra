@@ -417,13 +417,6 @@ Depends: xpra-common (= ${binary:Version})
 #trixie:              ,libdav1d7
 #forky:              ,libdav1d7
 #sid:              ,libdav1d7
-#noble:              ,libopenjph0.9
-#questing:              ,libopenjph0.21
-#resolute:              ,libopenjph0.26
-#stonking:              ,libopenjph0.28
-#trixie:              ,libopenjph0.21
-#forky:              ,libopenjph0.28
-#sid:              ,libopenjph0.28
               ,libaom3
 #jammy:              ,libvpl2 [amd64]
 #noble:              ,libvpl2 [amd64]
