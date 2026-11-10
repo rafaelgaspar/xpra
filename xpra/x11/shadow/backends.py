@@ -43,7 +43,7 @@ def setup_nvfbc_capture():
 
 
 def setup_xshm_capture():
-    XSHM = envbool("XPRA_XSHM", True)
+    XSHM = envbool("XPRA_SHADOW_XSHM", True)
     if not XSHM:
         return None
     try:

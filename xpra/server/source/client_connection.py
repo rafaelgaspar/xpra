@@ -179,7 +179,7 @@ class ClientConnection(StubClientConnection):
         at_end = self.encode_at_end
         self.encode_at_end = []
         for fn, args in at_end:
-            self.queue_encode((False, fn, args))
+            self.queue_encode((fn, args))
         self.queue_encode(None)
 
     def queue_packet(self, packet: Packet, wid=0, pixels=0,

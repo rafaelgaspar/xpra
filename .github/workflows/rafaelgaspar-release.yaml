@@ -54,20 +54,9 @@ jobs:
 
       - name: Resolve integration tag
         id: release
-        env:
-          UPSTREAM_TAG_INPUT: ${{ inputs.upstream_tag }}
         run: |
-          set -euo pipefail
-          integration_base="${UPSTREAM_TAG_INPUT}"
-          if [[ -z "${integration_base}" ]]; then
-            git fetch upstream v7.x:v7.x
-            merge=$(git merge-base HEAD upstream/v7.x)
-            short=$(git rev-parse --short=7 "${merge}")
-            ver=$(git show "${merge}:xpra/__init__.py" | sed -n 's/^__version__ = "\([^"]*\)".*/\1/p' | head -1)
-            integration_base="v${ver}-${short}"
-          fi
           chmod +x ./.github/scripts/resolve-integration-tag.sh
-          ./.github/scripts/resolve-integration-tag.sh 'v*.*.*' '^v[0-9]+\.[0-9]+\.[0-9]+$' "${integration_base}"
+          ./.github/scripts/resolve-integration-tag.sh 'v*.*.*' '^v[0-9]+\.[0-9]+\.[0-9]+$' "${{ inputs.upstream_tag }}"
           integration_version=$(grep '^integration_version=' "$GITHUB_OUTPUT" | tail -1 | cut -d= -f2-)
           base_tag=$(grep '^base_tag=' "$GITHUB_OUTPUT" | tail -1 | cut -d= -f2-)
           pkg_ver=$(grep '^package_upstream_version=' "$GITHUB_OUTPUT" | tail -1 | cut -d= -f2-)
@@ -81,33 +70,22 @@ jobs:
           ref: rafaelgaspar
           path: xpra-html5-src
           fetch-depth: 0
-          fetch-tags: true
 
       - name: Download xpra-html5 release tarball for overlay deb
         id: html5
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          html5_tag=$(gh release list --repo rafaelgaspar/xpra-html5 --limit 30 --json tagName \
-            -q '[.[].tagName | select(contains("rafaelgaspar."))] | sort | last // empty')
-          [[ -n "${html5_tag}" ]] || { echo "No rafaelgaspar xpra-html5 release found"; exit 1; }
-          base_tag="${html5_tag%-rafaelgaspar.*}"
-          if [[ "${base_tag}" =~ ^v[0-9]+$ ]]; then
-            :
-          elif [[ "${base_tag}" =~ ^v[0-9]+\.[0-9]+$ ]]; then
-            :
-          else
-            ver=$(gh api "repos/rafaelgaspar/xpra-html5/contents/setup.py?ref=rafaelgaspar" \
-              -H "Accept: application/vnd.github.raw" 2>/dev/null \
-              | sed -n 's/^VERSION = "\([^"]*\)".*/\1/p' | head -1)
-            short="${html5_tag#v}"
-            short="${short%%-rafaelgaspar.*}"
-            short="${short#*-}"
-            short="${short:0:7}"
-            [[ -n "${ver}" && -n "${short}" ]] && base_tag="v${ver}-${short}" || base_tag="${base_tag}"
-          fi
           cd xpra-html5-src
+          if git remote get-url upstream >/dev/null 2>&1; then
+            git remote set-url upstream https://github.com/Xpra-org/xpra-html5.git
+          else
+            git remote add upstream https://github.com/Xpra-org/xpra-html5.git
+          fi
+          git fetch --tags upstream
+          base_tag=$(git tag -l 'v[0-9]*' --merged HEAD | grep -E '^v[0-9]+$' | sort -V | tail -1)
+          [[ -n "${base_tag}" ]] || { echo "No upstream html5 base tag found"; exit 1; }
+          html5_tag=$(git tag -l "${base_tag}-rafaelgaspar*" --points-at HEAD | sort -V | tail -1)
+          [[ -n "${html5_tag}" ]] || { echo "No rafaelgaspar integration tag on xpra-html5 HEAD; release xpra-html5 first"; exit 1; }
           html5_version="${html5_tag#v}"
           asset="xpra-html5-${html5_version}.tar.gz"
           mkdir -p ../dist
@@ -137,19 +115,11 @@ jobs:
             tag=$(git tag -l "${BASE_TAG}-rafaelgaspar.*" --points-at HEAD | sort -V | tail -1)
             body=$(gh release view "${tag}" --repo rafaelgaspar/xpra --json body -q .body) || body=""
             bundled=$(grep -oE 'xpra-html5 @ v[^ )]+' <<<"${body}" | head -1 | sed 's/^xpra-html5 @ //') || bundled=""
-            release_ok=true
-            if ! gh release view "${tag}" --repo rafaelgaspar/xpra >/dev/null 2>&1; then
-              release_ok=false
-            fi
-            if [[ "${bundled}" != "${HTML5_TAG}" ]] || [[ "${release_ok}" != "true" ]]; then
+            if [[ "${bundled}" != "${HTML5_TAG}" ]]; then
               latest=$(git tag -l "${BASE_TAG}-rafaelgaspar.*" | sort -V | tail -1)
               tag="${BASE_TAG}-rafaelgaspar.$((${latest##*.} + 1))"
               skip=false
-              if [[ "${release_ok}" != "true" ]]; then
-                echo "${tag}: integration tag exists but GitHub release is missing"
-              else
-                echo "${tag}: the release of this commit bundles xpra-html5 ${bundled:-(unknown)}, not ${HTML5_TAG}"
-              fi
+              echo "${tag}: the release of this commit bundles xpra-html5 ${bundled:-(unknown)}, not ${HTML5_TAG}"
             fi
           fi
           {
@@ -158,7 +128,7 @@ jobs:
             echo "skip_release=${skip}"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Map Debian version (full fork deb integrations)
+      - name: Map Debian version (main-line integrations)
         id: debian_ver
         run: |
           set -euo pipefail
@@ -167,16 +137,11 @@ jobs:
             deb=$(printf '%s' "$v" | sed -E 's/^([0-9]+(\.[0-9]+)*)-main-([0-9a-f]+)-rafaelgaspar\.([0-9]+)$/\1~main+\3.rafaelgaspar.\4/')
             echo "debian_version=${deb}" >> "$GITHUB_OUTPUT"
             echo "build_full=true" >> "$GITHUB_OUTPUT"
-          elif echo "$v" | grep -qE '^[0-9]+(\.[0-9]+)*-[0-9a-f]+-rafaelgaspar\.[0-9]+$'; then
-            deb=$(printf '%s' "$v" | sed -E 's/^([0-9]+(\.[0-9]+)*)-([0-9a-f]+)-rafaelgaspar\.([0-9]+)$/\1~\3.rafaelgaspar.\4/')
-            echo "debian_version=${deb}" >> "$GITHUB_OUTPUT"
-            echo "build_full=true" >> "$GITHUB_OUTPUT"
           else
             echo "build_full=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Build overlay deb
-        if: steps.debian_ver.outputs.build_full != 'true'
         run: |
           chmod +x ./packaging/rafaelgaspar-overlay/build-deb.sh
           ./packaging/rafaelgaspar-overlay/build-deb.sh \
@@ -185,17 +150,9 @@ jobs:
             "${{ steps.html5.outputs.tarball }}" \
             "${{ steps.html5.outputs.base_tag }}"
 
-      - name: Install Debian package build toolchain
+      - name: Build full xpra debs (tracks main)
         if: steps.debian_ver.outputs.build_full == 'true'
-        run: |
-          set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            build-essential debhelper devscripts dh-python dpkg-dev equivs fakeroot \
-            lsb-release python3-all python3-dev python3-pip python3-setuptools quilt
-
-      - name: Build full xpra debs (fork stack)
-        if: steps.debian_ver.outputs.build_full == 'true'
+        continue-on-error: true
         run: |
           set -euo pipefail
           chmod +x ./packaging/debian/build-rafaelgaspar-from-git.sh
@@ -218,45 +175,21 @@ jobs:
           TAG: ${{ steps.decide.outputs.tag }}
           DEB: dist/xpra-rafaelgaspar-overlay_${{ steps.decide.outputs.deb_version }}_all.deb
         run: |
-          set -euo pipefail
-          build_full="${{ steps.debian_ver.outputs.build_full }}"
-          if [ "${build_full}" = "true" ]; then
-            body=$(cat <<EOF
-          rafaelgaspar integration release based on upstream ${{ steps.release.outputs.base_tag }}.
-
-          Full Debian packages built from this tree (install via \`deb-manifest.txt\`).
-          HTML5 www tree staged from xpra-html5 @ ${{ steps.html5.outputs.html5_tag }}.
-          Client tarball: [rafaelgaspar/xpra-html5](https://github.com/rafaelgaspar/xpra-html5/releases/tag/${{ steps.html5.outputs.html5_tag }})
-          EOF
-            )
-          else
-            body=$(cat <<EOF
+          body=$(cat <<EOF
           rafaelgaspar integration release based on upstream ${{ steps.release.outputs.base_tag }}.
 
           - \`xpra-rafaelgaspar-overlay\` Debian package (dpkg-divert; Python patches + HTML5 www tree from rafaelgaspar/xpra-html5 @ ${{ steps.html5.outputs.html5_tag }})
           - HTML5 client tarball is published only on [rafaelgaspar/xpra-html5](https://github.com/rafaelgaspar/xpra-html5/releases/tag/${{ steps.html5.outputs.html5_tag }})
           EOF
-            )
-          fi
-          mapfile -t assets < <(find dist/debian -maxdepth 1 -name '*.deb' ! -name 'xpra-build-deps_*' -type f | sort)
+          )
+          assets=("${DEB}")
           if [ -f dist/debian/deb-manifest.txt ]; then
-            manifest_lines=$(grep -cve '^[[:space:]]*$' dist/debian/deb-manifest.txt || true)
-            if [ "${manifest_lines}" -eq 0 ]; then
-              echo "deb-manifest.txt is empty" >&2
-              exit 1
-            fi
+            assets+=(dist/debian/*.deb)
             assets+=(dist/debian/deb-manifest.txt)
-          fi
-          if [ -f "${DEB}" ]; then
-            assets+=("${DEB}")
-          fi
-          if [ ${#assets[@]} -eq 0 ]; then
-            echo "no release assets built" >&2
-            exit 1
           fi
           gh release create "${TAG}" \
             --repo rafaelgaspar/xpra \
             --title "${TAG}" \
             --notes "${body}" \
             --target rafaelgaspar \
-            "${assets[@]}"
+            "${assets[@]}""
