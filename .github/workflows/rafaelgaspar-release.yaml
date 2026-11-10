@@ -220,7 +220,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.decide.outputs.tag }}
           FORKY_IMAGE: debian:forky@sha256:49c219ade93d7c11635c0d57e735ed82339a503a4376cd6957046c2bd4e5905b
-          APT_SIGN_KEY_ID: ${{ secrets.APT_SIGN_KEY_ID }}
+          APT_SIGN_KEY_ID: ${{ vars.APT_SIGN_KEY_ID }}
           APT_REPO_GPG_PRIVATE_KEY: ${{ secrets.APT_REPO_GPG_PRIVATE_KEY }}
           APT_REPO_GPG_PUBLIC_ARMOR: ${{ secrets.APT_REPO_GPG_PUBLIC_ARMOR }}
         run: |
