@@ -60,7 +60,7 @@ jobs:
           set -euo pipefail
           integration_base="${UPSTREAM_TAG_INPUT}"
           if [[ -z "${integration_base}" ]]; then
-            git fetch --depth=1 upstream v7.x:v7.x
+            git fetch upstream v7.x:v7.x
             merge=$(git merge-base HEAD upstream/v7.x)
             short=$(git rev-parse --short=7 "${merge}")
             ver=$(git show "${merge}:xpra/__init__.py" | sed -n 's/^__version__ = "\([^"]*\)".*/\1/p' | head -1)
