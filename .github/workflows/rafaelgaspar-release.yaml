@@ -84,7 +84,11 @@ jobs:
           git fetch --tags upstream
           base_tag=$(git tag -l 'v[0-9]*' --merged HEAD | grep -E '^v[0-9]+$' | sort -V | tail -1)
           [[ -n "${base_tag}" ]] || { echo "No upstream html5 base tag found"; exit 1; }
-          html5_tag=$(git tag -l "${base_tag}-rafaelgaspar*" --points-at HEAD | sort -V | tail -1)
+          # Branch-line html5 tags (v21-{shortsha}-rafaelgaspar.N) do not match v21-rafaelgaspar*.
+          html5_tag=$(git tag -l '*-rafaelgaspar.*' --points-at HEAD | sort -V | tail -1)
+          if [[ -z "${html5_tag}" ]]; then
+            html5_tag=$(git tag -l "${base_tag}-rafaelgaspar*" --points-at HEAD | sort -V | tail -1)
+          fi
           [[ -n "${html5_tag}" ]] || { echo "No rafaelgaspar integration tag on xpra-html5 HEAD; release xpra-html5 first"; exit 1; }
           html5_version="${html5_tag#v}"
           asset="xpra-html5-${html5_version}.tar.gz"
