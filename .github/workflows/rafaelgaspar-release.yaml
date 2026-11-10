@@ -245,11 +245,16 @@ jobs:
             printf '%s' "$APT_REPO_GPG_PRIVATE_KEY" >"${RUNNER_TEMP}/apt-signing.key"
             key_mount=(-v "${RUNNER_TEMP}/apt-signing.key:/apt-signing.key:ro")
           fi
+          signing_env=()
+          if [[ -n "${APT_REPO_GPG_PRIVATE_KEY:-}" && -n "${APT_SIGN_KEY_ID:-}" ]]; then
+            signing_env=(-e APT_REPO_SIGNING=1)
+          fi
           docker run --rm \
             -e DEBIAN_FRONTEND=noninteractive \
             -e RAFAELGASPAR_DEBIAN_SUITE=forky \
             -e APT_SIGN_KEY_ID \
             -e APT_REPO_GPG_PUBLIC_ARMOR \
+            "${signing_env[@]}" \
             -v "${GITHUB_WORKSPACE}:/work" \
             -v "${pages_dir}/apt:/repo" \
             "${key_mount[@]}" \
@@ -257,7 +262,7 @@ jobs:
             bash -euxo pipefail -c '
               apt-get update
               apt-get install -y --no-install-recommends reprepro gnupg ca-certificates
-              if [[ -n "${APT_SIGN_KEY_ID:-}" && -f /apt-signing.key ]]; then
+              if [[ "${APT_REPO_SIGNING:-}" == 1 && -f /apt-signing.key ]]; then
                 export GNUPGHOME=/tmp/gnupg
                 install -d -m 700 "$GNUPGHOME"
                 gpg --batch --import /apt-signing.key

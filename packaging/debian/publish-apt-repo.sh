@@ -11,9 +11,10 @@ SUITE="${RAFAELGASPAR_DEBIAN_SUITE:-forky}"
 [[ -d "$DEB_DIR" ]] || { echo "missing debs dir: $DEB_DIR" >&2; exit 1; }
 mkdir -p "$REPO_DIR/conf"
 
-SIGN_WITH="!"
-if [[ -n "${APT_SIGN_KEY_ID:-}" && -n "${APT_REPO_GPG_PRIVATE_KEY:-}" ]]; then
-  SIGN_WITH="${APT_SIGN_KEY_ID}"
+# Signing: gpg key is imported in CI before this script runs; APT_REPO_SIGNING=1 + APT_SIGN_KEY_ID.
+SIGN_BLOCK=""
+if [[ "${APT_REPO_SIGNING:-}" == 1 && -n "${APT_SIGN_KEY_ID:-}" ]]; then
+  SIGN_BLOCK=$(printf 'SignWith: %s\n' "${APT_SIGN_KEY_ID}")
 fi
 
 cat >"$REPO_DIR/conf/distributions" <<EOF
@@ -24,7 +25,7 @@ Codename: ${SUITE}
 Architectures: amd64
 Components: main
 Description: rafaelgaspar/xpra integration releases for Debian ${SUITE}
-SignWith: ${SIGN_WITH}
+${SIGN_BLOCK}
 EOF
 
 cat >"$REPO_DIR/conf/options" <<EOF
