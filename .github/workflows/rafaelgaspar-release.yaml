@@ -81,6 +81,7 @@ jobs:
           ref: rafaelgaspar
           path: xpra-html5-src
           fetch-depth: 0
+          fetch-tags: true
 
       - name: Download xpra-html5 release tarball for overlay deb
         id: html5
@@ -92,9 +93,15 @@ jobs:
           else
             git remote add upstream https://github.com/Xpra-org/xpra-html5.git
           fi
+          git fetch origin --tags
           git fetch --tags upstream
           base_tag=$(git tag -l 'v[0-9]*' --merged HEAD | grep -E '^v[0-9]+$' | sort -V | tail -1)
-          [[ -n "${base_tag}" ]] || { echo "No upstream html5 base tag found"; exit 1; }
+          if [[ -z "${base_tag}" ]]; then
+            ver=$(git show HEAD:setup.py 2>/dev/null | sed -n 's/^VERSION = "\([^"]*\)".*/\1/p' | head -1)
+            short=$(git rev-parse --short=7 HEAD)
+            [[ -n "${ver}" ]] || { echo "No upstream html5 base tag found"; exit 1; }
+            base_tag="v${ver}-${short}"
+          fi
           # Branch-line html5 tags (v21-{shortsha}-rafaelgaspar.N) do not match v21-rafaelgaspar*.
           html5_tag=$(git tag -l '*-rafaelgaspar.*' --points-at HEAD | sort -V | tail -1)
           if [[ -z "${html5_tag}" ]]; then
