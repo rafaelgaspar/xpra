@@ -85,6 +85,8 @@ jobs:
 
       - name: Download xpra-html5 release tarball for overlay deb
         id: html5
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           cd xpra-html5-src
@@ -106,6 +108,10 @@ jobs:
           html5_tag=$(git tag -l '*-rafaelgaspar.*' --points-at HEAD | sort -V | tail -1)
           if [[ -z "${html5_tag}" ]]; then
             html5_tag=$(git tag -l "${base_tag}-rafaelgaspar*" --points-at HEAD | sort -V | tail -1)
+          fi
+          if [[ -z "${html5_tag}" ]]; then
+            html5_tag=$(gh release list --repo rafaelgaspar/xpra-html5 --limit 30 --json tagName \
+              -q '.[].tagName' | grep -E '-rafaelgaspar\.' | sort -V | tail -1)
           fi
           [[ -n "${html5_tag}" ]] || { echo "No rafaelgaspar integration tag on xpra-html5 HEAD; release xpra-html5 first"; exit 1; }
           html5_version="${html5_tag#v}"
