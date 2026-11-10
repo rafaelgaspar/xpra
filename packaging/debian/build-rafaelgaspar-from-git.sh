@@ -107,4 +107,6 @@ emit_deb() {
 
 count=$(wc -l <"$MANIFEST")
 [[ "$count" -gt 0 ]] || { echo "no debs matched for manifest" >&2; exit 1; }
+# deb-manifest must match GitHub release asset names (dpkg ~ → archive .).
+sed -i 's/~/./g' "$MANIFEST"
 echo "built ${count} debs -> $OUT_DIR"
