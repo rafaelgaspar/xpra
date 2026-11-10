@@ -39,9 +39,17 @@ EOF
 export DEB_BUILD_OPTIONS="${DEB_BUILD_OPTIONS:-} noddebs"
 export PIP_BREAK_SYSTEM_PACKAGES=1
 
-mk-build-deps --install --tool='apt-get -o Debug::pkgProblemResolver=yes --no-install-recommends --yes' debian/control
+if [[ "$(id -u)" -ne 0 ]]; then
+  SUDO=(sudo)
+else
+  SUDO=()
+fi
+
+"${SUDO[@]}" mk-build-deps --install \
+  --tool='apt-get -o Debug::pkgProblemResolver=yes --no-install-recommends --yes' \
+  debian/control
 rm -f xpra-build-deps* 2>/dev/null || true
-DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends python3-pip
+"${SUDO[@]}" env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends python3-pip
 pip3 install --upgrade 'cython>=3'
 
 debuild -b -us -uc
