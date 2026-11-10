@@ -50,7 +50,15 @@ fi
   debian/control
 rm -f xpra-build-deps* 2>/dev/null || true
 "${SUDO[@]}" env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends python3-pip
-pip3 install --upgrade 'cython>=3'
+"${SUDO[@]}" env DEBIAN_FRONTEND=noninteractive apt-get remove -y cython3 2>/dev/null || true
+python3 -m pip install --upgrade 'cython>=3'
+CYTHON_BIN="$(python3 -c 'import shutil; print(shutil.which("cython") or "")')"
+if [[ -z "$CYTHON_BIN" || ! -x "$CYTHON_BIN" ]]; then
+  echo "cython executable not found after pip install" >&2
+  exit 1
+fi
+"${SUDO[@]}" install -d /usr/local/bin
+"${SUDO[@]}" ln -sf "$CYTHON_BIN" /usr/local/bin/cython
 
 debuild -b -us -uc
 "${REPO_ROOT}/packaging/debian/verify-debs.sh" ../*.deb
