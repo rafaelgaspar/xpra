@@ -89,31 +89,25 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          cd xpra-html5-src
-          if git remote get-url upstream >/dev/null 2>&1; then
-            git remote set-url upstream https://github.com/Xpra-org/xpra-html5.git
+          html5_tag=$(gh release list --repo rafaelgaspar/xpra-html5 --limit 30 --json tagName \
+            -q '[.[].tagName | select(contains("rafaelgaspar."))] | sort | last // empty')
+          [[ -n "${html5_tag}" ]] || { echo "No rafaelgaspar xpra-html5 release found"; exit 1; }
+          base_tag="${html5_tag%-rafaelgaspar.*}"
+          if [[ "${base_tag}" =~ ^v[0-9]+$ ]]; then
+            :
+          elif [[ "${base_tag}" =~ ^v[0-9]+\.[0-9]+$ ]]; then
+            :
           else
-            git remote add upstream https://github.com/Xpra-org/xpra-html5.git
+            ver=$(gh api "repos/rafaelgaspar/xpra-html5/contents/setup.py?ref=rafaelgaspar" \
+              -H "Accept: application/vnd.github.raw" 2>/dev/null \
+              | sed -n 's/^VERSION = "\([^"]*\)".*/\1/p' | head -1)
+            short="${html5_tag#v}"
+            short="${short%%-rafaelgaspar.*}"
+            short="${short#*-}"
+            short="${short:0:7}"
+            [[ -n "${ver}" && -n "${short}" ]] && base_tag="v${ver}-${short}" || base_tag="${base_tag}"
           fi
-          git fetch origin --tags || true
-          git fetch --tags upstream || true
-          base_tag=$(git tag -l 'v[0-9]*' --merged HEAD | grep -E '^v[0-9]+$' | sort -V | tail -1)
-          if [[ -z "${base_tag}" ]]; then
-            ver=$(git show HEAD:setup.py 2>/dev/null | sed -n 's/^VERSION = "\([^"]*\)".*/\1/p' | head -1)
-            short=$(git rev-parse --short=7 HEAD)
-            [[ -n "${ver}" ]] || { echo "No upstream html5 base tag found"; exit 1; }
-            base_tag="v${ver}-${short}"
-          fi
-          # Branch-line html5 tags (v21-{shortsha}-rafaelgaspar.N) do not match v21-rafaelgaspar*.
-          html5_tag=$(git tag -l '*-rafaelgaspar.*' --points-at HEAD | sort -V | tail -1)
-          if [[ -z "${html5_tag}" ]]; then
-            html5_tag=$(git tag -l "${base_tag}-rafaelgaspar*" --points-at HEAD | sort -V | tail -1)
-          fi
-          if [[ -z "${html5_tag}" ]]; then
-            html5_tag=$(gh release list --repo rafaelgaspar/xpra-html5 --limit 20 --json tagName \
-              -q '[.[].tagName | select(contains("rafaelgaspar."))] | sort | last // empty' || true)
-          fi
-          [[ -n "${html5_tag}" ]] || { echo "No rafaelgaspar integration tag on xpra-html5 HEAD; release xpra-html5 first"; exit 1; }
+          cd xpra-html5-src
           html5_version="${html5_tag#v}"
           asset="xpra-html5-${html5_version}.tar.gz"
           mkdir -p ../dist
