@@ -25,7 +25,9 @@ fi
 rm -rf debian
 ln -sf packaging/debian/xpra debian
 
-CODENAME="$(lsb_release -cs 2>/dev/null || echo trixie)"
+# k3s-home images use debian:forky; integration debs must match that suite
+# (not the CI host codename from lsb_release).
+CODENAME="${RAFAELGASPAR_DEBIAN_SUITE:-forky}"
 perl -i.bak -pe "s/#${CODENAME}:/#${CODENAME}:\\n/g" debian/control
 
 cat > debian/changelog <<EOF
@@ -58,7 +60,9 @@ if [[ -z "$CYTHON_BIN" || ! -x "$CYTHON_BIN" ]]; then
   exit 1
 fi
 "${SUDO[@]}" install -d /usr/local/bin
-"${SUDO[@]}" ln -sf "$CYTHON_BIN" /usr/local/bin/cython
+if [[ "$(readlink -f "$CYTHON_BIN")" != "$(readlink -f /usr/local/bin/cython 2>/dev/null || true)" ]]; then
+  "${SUDO[@]}" ln -sf "$CYTHON_BIN" /usr/local/bin/cython
+fi
 
 debuild -b -us -uc
 "${REPO_ROOT}/packaging/debian/verify-debs.sh" ../*.deb
@@ -107,4 +111,6 @@ emit_deb() {
 
 count=$(wc -l <"$MANIFEST")
 [[ "$count" -gt 0 ]] || { echo "no debs matched for manifest" >&2; exit 1; }
+# deb-manifest must match GitHub release asset names (dpkg ~ → archive .).
+sed -i 's/~/./g' "$MANIFEST"
 echo "built ${count} debs -> $OUT_DIR"
