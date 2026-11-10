@@ -54,9 +54,20 @@ jobs:
 
       - name: Resolve integration tag
         id: release
+        env:
+          UPSTREAM_TAG_INPUT: ${{ inputs.upstream_tag }}
         run: |
+          set -euo pipefail
+          integration_base="${UPSTREAM_TAG_INPUT}"
+          if [[ -z "${integration_base}" ]]; then
+            git fetch upstream v7.x:v7.x
+            merge=$(git merge-base HEAD upstream/v7.x)
+            short=$(git rev-parse --short=7 "${merge}")
+            ver=$(git show "${merge}:xpra/__init__.py" | sed -n 's/^__version__ = "\([^"]*\)".*/\1/p' | head -1)
+            integration_base="v${ver}-${short}"
+          fi
           chmod +x ./.github/scripts/resolve-integration-tag.sh
-          ./.github/scripts/resolve-integration-tag.sh 'v*.*.*' '^v[0-9]+\.[0-9]+\.[0-9]+$' "${{ inputs.upstream_tag }}"
+          ./.github/scripts/resolve-integration-tag.sh 'v*.*.*' '^v[0-9]+\.[0-9]+\.[0-9]+$' "${integration_base}"
           integration_version=$(grep '^integration_version=' "$GITHUB_OUTPUT" | tail -1 | cut -d= -f2-)
           base_tag=$(grep '^base_tag=' "$GITHUB_OUTPUT" | tail -1 | cut -d= -f2-)
           pkg_ver=$(grep '^package_upstream_version=' "$GITHUB_OUTPUT" | tail -1 | cut -d= -f2-)
@@ -70,22 +81,33 @@ jobs:
           ref: rafaelgaspar
           path: xpra-html5-src
           fetch-depth: 0
+          fetch-tags: true
 
       - name: Download xpra-html5 release tarball for overlay deb
         id: html5
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          cd xpra-html5-src
-          if git remote get-url upstream >/dev/null 2>&1; then
-            git remote set-url upstream https://github.com/Xpra-org/xpra-html5.git
+          html5_tag=$(gh release list --repo rafaelgaspar/xpra-html5 --limit 30 --json tagName \
+            -q '[.[].tagName | select(contains("rafaelgaspar."))] | sort | last // empty')
+          [[ -n "${html5_tag}" ]] || { echo "No rafaelgaspar xpra-html5 release found"; exit 1; }
+          base_tag="${html5_tag%-rafaelgaspar.*}"
+          if [[ "${base_tag}" =~ ^v[0-9]+$ ]]; then
+            :
+          elif [[ "${base_tag}" =~ ^v[0-9]+\.[0-9]+$ ]]; then
+            :
           else
-            git remote add upstream https://github.com/Xpra-org/xpra-html5.git
+            ver=$(gh api "repos/rafaelgaspar/xpra-html5/contents/setup.py?ref=rafaelgaspar" \
+              -H "Accept: application/vnd.github.raw" 2>/dev/null \
+              | sed -n 's/^VERSION = "\([^"]*\)".*/\1/p' | head -1)
+            short="${html5_tag#v}"
+            short="${short%%-rafaelgaspar.*}"
+            short="${short#*-}"
+            short="${short:0:7}"
+            [[ -n "${ver}" && -n "${short}" ]] && base_tag="v${ver}-${short}" || base_tag="${base_tag}"
           fi
-          git fetch --tags upstream
-          base_tag=$(git tag -l 'v[0-9]*' --merged HEAD | grep -E '^v[0-9]+$' | sort -V | tail -1)
-          [[ -n "${base_tag}" ]] || { echo "No upstream html5 base tag found"; exit 1; }
-          html5_tag=$(git tag -l "${base_tag}-rafaelgaspar*" --points-at HEAD | sort -V | tail -1)
-          [[ -n "${html5_tag}" ]] || { echo "No rafaelgaspar integration tag on xpra-html5 HEAD; release xpra-html5 first"; exit 1; }
+          cd xpra-html5-src
           html5_version="${html5_tag#v}"
           asset="xpra-html5-${html5_version}.tar.gz"
           mkdir -p ../dist
@@ -115,11 +137,19 @@ jobs:
             tag=$(git tag -l "${BASE_TAG}-rafaelgaspar.*" --points-at HEAD | sort -V | tail -1)
             body=$(gh release view "${tag}" --repo rafaelgaspar/xpra --json body -q .body) || body=""
             bundled=$(grep -oE 'xpra-html5 @ v[^ )]+' <<<"${body}" | head -1 | sed 's/^xpra-html5 @ //') || bundled=""
-            if [[ "${bundled}" != "${HTML5_TAG}" ]]; then
+            release_ok=true
+            if ! gh release view "${tag}" --repo rafaelgaspar/xpra >/dev/null 2>&1; then
+              release_ok=false
+            fi
+            if [[ "${bundled}" != "${HTML5_TAG}" ]] || [[ "${release_ok}" != "true" ]]; then
               latest=$(git tag -l "${BASE_TAG}-rafaelgaspar.*" | sort -V | tail -1)
               tag="${BASE_TAG}-rafaelgaspar.$((${latest##*.} + 1))"
               skip=false
-              echo "${tag}: the release of this commit bundles xpra-html5 ${bundled:-(unknown)}, not ${HTML5_TAG}"
+              if [[ "${release_ok}" != "true" ]]; then
+                echo "${tag}: integration tag exists but GitHub release is missing"
+              else
+                echo "${tag}: the release of this commit bundles xpra-html5 ${bundled:-(unknown)}, not ${HTML5_TAG}"
+              fi
             fi
           fi
           {
@@ -128,7 +158,7 @@ jobs:
             echo "skip_release=${skip}"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Map Debian version (main-line integrations)
+      - name: Map Debian version (full fork deb integrations)
         id: debian_ver
         run: |
           set -euo pipefail
@@ -137,11 +167,16 @@ jobs:
             deb=$(printf '%s' "$v" | sed -E 's/^([0-9]+(\.[0-9]+)*)-main-([0-9a-f]+)-rafaelgaspar\.([0-9]+)$/\1~main+\3.rafaelgaspar.\4/')
             echo "debian_version=${deb}" >> "$GITHUB_OUTPUT"
             echo "build_full=true" >> "$GITHUB_OUTPUT"
+          elif echo "$v" | grep -qE '^[0-9]+(\.[0-9]+)*-[0-9a-f]+-rafaelgaspar\.[0-9]+$'; then
+            deb=$(printf '%s' "$v" | sed -E 's/^([0-9]+(\.[0-9]+)*)-([0-9a-f]+)-rafaelgaspar\.([0-9]+)$/\1~\3.rafaelgaspar.\4/')
+            echo "debian_version=${deb}" >> "$GITHUB_OUTPUT"
+            echo "build_full=true" >> "$GITHUB_OUTPUT"
           else
             echo "build_full=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Build overlay deb
+        if: steps.debian_ver.outputs.build_full != 'true'
         run: |
           chmod +x ./packaging/rafaelgaspar-overlay/build-deb.sh
           ./packaging/rafaelgaspar-overlay/build-deb.sh \
@@ -150,15 +185,98 @@ jobs:
             "${{ steps.html5.outputs.tarball }}" \
             "${{ steps.html5.outputs.base_tag }}"
 
-      - name: Build full xpra debs (tracks main)
+      - name: Build full xpra debs (fork stack, debian:forky)
         if: steps.debian_ver.outputs.build_full == 'true'
-        continue-on-error: true
+        env:
+          FORKY_IMAGE: debian:forky@sha256:49c219ade93d7c11635c0d57e735ed82339a503a4376cd6957046c2bd4e5905b
+          DEBIAN_VERSION: ${{ steps.debian_ver.outputs.debian_version }}
+          HTML5_TAR: ${{ steps.html5.outputs.tarball }}
         run: |
           set -euo pipefail
           chmod +x ./packaging/debian/build-rafaelgaspar-from-git.sh
-          ./packaging/debian/build-rafaelgaspar-from-git.sh \
-            "${{ steps.debian_ver.outputs.debian_version }}" \
-            "${{ steps.html5.outputs.tarball }}"
+          docker run --rm \
+            -e DEBIAN_FRONTEND=noninteractive \
+            -e RAFAELGASPAR_DEBIAN_SUITE=forky \
+            -e DEBIAN_VERSION \
+            -e HTML5_TAR \
+            -v "${GITHUB_WORKSPACE}:/work" -w /work \
+            "${FORKY_IMAGE}" \
+            bash -euxo pipefail -c '
+              if [[ -f /etc/apt/sources.list.d/debian.sources ]]; then
+                sed -i "s/Components: main/Components: main contrib non-free non-free-firmware/" \
+                  /etc/apt/sources.list.d/debian.sources
+              fi
+              apt-get update
+              apt-get install -y --no-install-recommends \
+                build-essential debhelper devscripts dh-python dpkg-dev equivs fakeroot \
+                lsb-release python3-all python3-dev python3-pip python3-setuptools quilt \
+                ca-certificates
+              ./packaging/debian/build-rafaelgaspar-from-git.sh "${DEBIAN_VERSION}" "${HTML5_TAR}"
+            '
+
+      - name: Publish apt repo to GitHub Pages
+        if: steps.debian_ver.outputs.build_full == 'true' && steps.decide.outputs.skip_release != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.decide.outputs.tag }}
+          FORKY_IMAGE: debian:forky@sha256:49c219ade93d7c11635c0d57e735ed82339a503a4376cd6957046c2bd4e5905b
+          APT_SIGN_KEY_ID: ${{ vars.APT_SIGN_KEY_ID }}
+          APT_REPO_GPG_PRIVATE_KEY: ${{ secrets.APT_REPO_GPG_PRIVATE_KEY }}
+          APT_REPO_GPG_PUBLIC_ARMOR: ${{ secrets.APT_REPO_GPG_PUBLIC_ARMOR }}
+        run: |
+          set -euo pipefail
+          chmod +x ./packaging/debian/publish-apt-repo.sh
+          pages_dir="${RUNNER_TEMP}/apt-pages"
+          rm -rf "$pages_dir"
+          if git ls-remote --heads origin gh-pages | grep -q gh-pages; then
+            git clone --depth=1 -b gh-pages \
+              "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+              "$pages_dir"
+          else
+            mkdir -p "$pages_dir"
+            git -C "$pages_dir" init -b gh-pages
+            printf '%s\n' '# rafaelgaspar/xpra' '# Apt: https://rafaelgaspar.github.io/xpra/apt' >"$pages_dir/README.md"
+          fi
+          mkdir -p "${pages_dir}/apt"
+          key_mount=()
+          if [[ -n "${APT_REPO_GPG_PRIVATE_KEY:-}" ]]; then
+            install -m 600 /dev/null "${RUNNER_TEMP}/apt-signing.key" 2>/dev/null || \
+              { : >"${RUNNER_TEMP}/apt-signing.key"; chmod 600 "${RUNNER_TEMP}/apt-signing.key"; }
+            printf '%s' "$APT_REPO_GPG_PRIVATE_KEY" >"${RUNNER_TEMP}/apt-signing.key"
+            key_mount=(-v "${RUNNER_TEMP}/apt-signing.key:/apt-signing.key:ro")
+          fi
+          signing_env=()
+          if [[ -n "${APT_REPO_GPG_PRIVATE_KEY:-}" && -n "${APT_SIGN_KEY_ID:-}" ]]; then
+            signing_env=(-e APT_REPO_SIGNING=1)
+          fi
+          docker run --rm \
+            -e DEBIAN_FRONTEND=noninteractive \
+            -e RAFAELGASPAR_DEBIAN_SUITE=forky \
+            -e APT_SIGN_KEY_ID \
+            -e APT_REPO_GPG_PUBLIC_ARMOR \
+            "${signing_env[@]}" \
+            -v "${GITHUB_WORKSPACE}:/work" \
+            -v "${pages_dir}/apt:/repo" \
+            "${key_mount[@]}" \
+            "${FORKY_IMAGE}" \
+            bash -euxo pipefail -c '
+              apt-get update
+              apt-get install -y --no-install-recommends reprepro gnupg ca-certificates
+              if [[ "${APT_REPO_SIGNING:-}" == 1 && -f /apt-signing.key ]]; then
+                export GNUPGHOME=/tmp/gnupg
+                install -d -m 700 "$GNUPGHOME"
+                gpg --batch --import /apt-signing.key
+              fi
+              /work/packaging/debian/publish-apt-repo.sh /repo /work/dist/debian
+            '
+          git -C "$pages_dir" add -A
+          git -C "$pages_dir" -c user.name="Rafael Antunes" -c user.email="me@rafaelgaspar.xyz" \
+            diff --staged --quiet || \
+            git -C "$pages_dir" -c user.name="Rafael Antunes" -c user.email="me@rafaelgaspar.xyz" \
+              commit -m "apt: integrate ${TAG}"
+          git -C "$pages_dir" push \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            HEAD:gh-pages
 
       - name: Create and push integration tag
         if: steps.decide.outputs.skip_release != 'true'
@@ -175,21 +293,50 @@ jobs:
           TAG: ${{ steps.decide.outputs.tag }}
           DEB: dist/xpra-rafaelgaspar-overlay_${{ steps.decide.outputs.deb_version }}_all.deb
         run: |
-          body=$(cat <<EOF
+          set -euo pipefail
+          build_full="${{ steps.debian_ver.outputs.build_full }}"
+          if [ "${build_full}" = "true" ]; then
+            body=$(cat <<EOF
+          rafaelgaspar integration release based on upstream ${{ steps.release.outputs.base_tag }}.
+
+          Full Debian packages built from this tree on **debian:forky**.
+
+          - \`deb-manifest.txt\` + per-package \`.deb\` assets (manual install)
+          - **Apt:** \`deb [signed-by=/usr/share/keyrings/rafaelgaspar-xpra.gpg] https://rafaelgaspar.github.io/xpra/apt forky main\`
+            (key: https://rafaelgaspar.github.io/xpra/apt/rafaelgaspar-xpra.gpg.asc when signing is enabled)
+
+          HTML5 www tree staged from xpra-html5 @ ${{ steps.html5.outputs.html5_tag }}.
+          Client tarball: [rafaelgaspar/xpra-html5](https://github.com/rafaelgaspar/xpra-html5/releases/tag/${{ steps.html5.outputs.html5_tag }})
+          EOF
+            )
+          else
+            body=$(cat <<EOF
           rafaelgaspar integration release based on upstream ${{ steps.release.outputs.base_tag }}.
 
           - \`xpra-rafaelgaspar-overlay\` Debian package (dpkg-divert; Python patches + HTML5 www tree from rafaelgaspar/xpra-html5 @ ${{ steps.html5.outputs.html5_tag }})
           - HTML5 client tarball is published only on [rafaelgaspar/xpra-html5](https://github.com/rafaelgaspar/xpra-html5/releases/tag/${{ steps.html5.outputs.html5_tag }})
           EOF
-          )
-          assets=("${DEB}")
+            )
+          fi
+          mapfile -t assets < <(find dist/debian -maxdepth 1 -name '*.deb' ! -name 'xpra-build-deps_*' -type f | sort)
           if [ -f dist/debian/deb-manifest.txt ]; then
-            assets+=(dist/debian/*.deb)
+            manifest_lines=$(grep -cve '^[[:space:]]*$' dist/debian/deb-manifest.txt || true)
+            if [ "${manifest_lines}" -eq 0 ]; then
+              echo "deb-manifest.txt is empty" >&2
+              exit 1
+            fi
             assets+=(dist/debian/deb-manifest.txt)
+          fi
+          if [ -f "${DEB}" ]; then
+            assets+=("${DEB}")
+          fi
+          if [ ${#assets[@]} -eq 0 ]; then
+            echo "no release assets built" >&2
+            exit 1
           fi
           gh release create "${TAG}" \
             --repo rafaelgaspar/xpra \
             --title "${TAG}" \
             --notes "${body}" \
             --target rafaelgaspar \
-            "${assets[@]}""
+            "${assets[@]}"
