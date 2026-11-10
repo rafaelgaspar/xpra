@@ -25,7 +25,9 @@ fi
 rm -rf debian
 ln -sf packaging/debian/xpra debian
 
-CODENAME="$(lsb_release -cs 2>/dev/null || echo trixie)"
+# k3s-home images use debian:forky; integration debs must match that suite
+# (not the CI host codename from lsb_release).
+CODENAME="${RAFAELGASPAR_DEBIAN_SUITE:-forky}"
 perl -i.bak -pe "s/#${CODENAME}:/#${CODENAME}:\\n/g" debian/control
 
 cat > debian/changelog <<EOF
