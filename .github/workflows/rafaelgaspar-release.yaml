@@ -95,8 +95,8 @@ jobs:
           else
             git remote add upstream https://github.com/Xpra-org/xpra-html5.git
           fi
-          git fetch origin --tags
-          git fetch --tags upstream
+          git fetch origin --tags || true
+          git fetch --tags upstream || true
           base_tag=$(git tag -l 'v[0-9]*' --merged HEAD | grep -E '^v[0-9]+$' | sort -V | tail -1)
           if [[ -z "${base_tag}" ]]; then
             ver=$(git show HEAD:setup.py 2>/dev/null | sed -n 's/^VERSION = "\([^"]*\)".*/\1/p' | head -1)
@@ -110,8 +110,8 @@ jobs:
             html5_tag=$(git tag -l "${base_tag}-rafaelgaspar*" --points-at HEAD | sort -V | tail -1)
           fi
           if [[ -z "${html5_tag}" ]]; then
-            html5_tag=$(gh release list --repo rafaelgaspar/xpra-html5 --limit 30 --json tagName \
-              -q '.[].tagName' | grep -F 'rafaelgaspar.' | sort -V | tail -1)
+            html5_tag=$(gh release list --repo rafaelgaspar/xpra-html5 --limit 20 --json tagName \
+              -q '[.[].tagName[] | select(contains("rafaelgaspar."))] | sort | last // empty')
           fi
           [[ -n "${html5_tag}" ]] || { echo "No rafaelgaspar integration tag on xpra-html5 HEAD; release xpra-html5 first"; exit 1; }
           html5_version="${html5_tag#v}"
