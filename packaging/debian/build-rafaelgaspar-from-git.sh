@@ -60,7 +60,9 @@ if [[ -z "$CYTHON_BIN" || ! -x "$CYTHON_BIN" ]]; then
   exit 1
 fi
 "${SUDO[@]}" install -d /usr/local/bin
-"${SUDO[@]}" ln -sf "$CYTHON_BIN" /usr/local/bin/cython
+if [[ "$(readlink -f "$CYTHON_BIN")" != "$(readlink -f /usr/local/bin/cython 2>/dev/null || true)" ]]; then
+  "${SUDO[@]}" ln -sf "$CYTHON_BIN" /usr/local/bin/cython
+fi
 
 debuild -b -us -uc
 "${REPO_ROOT}/packaging/debian/verify-debs.sh" ../*.deb
