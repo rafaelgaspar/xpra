@@ -1,0 +1,20 @@
+Origin: rafaelgaspar
+Label: rafaelgaspar xpra integration
+Suite: forky
+Codename: forky
+Date: Tue, 10 Nov 2026 17:35:56 UTC
+Architectures: amd64
+Components: main
+Description: rafaelgaspar/xpra integration releases for Debian forky
+MD5Sum:
+ 3f20db2cb189c13b9a88518d4ddd9ef7 17434 main/binary-amd64/Packages
+ f05f630ca49b2faf73ba7737c0775af8 4372 main/binary-amd64/Packages.gz
+ b4531d2518858c6d64e326d331f9ae11 178 main/binary-amd64/Release
+SHA1:
+ 1004fa6d9386272d68fe66609f061ef64fbb71d7 17434 main/binary-amd64/Packages
+ 92152622d241074c0a79f257729279b710de5745 4372 main/binary-amd64/Packages.gz
+ c2fec4ea43eb3ab99fd1d62835487b2a10b25cef 178 main/binary-amd64/Release
+SHA256:
+ d2d2b6684562b882cedae4277b27c80e4b059d7df4188a6ed365003e1f2e40e7 17434 main/binary-amd64/Packages
+ a8b7846e8dff2baab4200dfd0b307b5106e33e6b932be8b3728b4613c706669f 4372 main/binary-amd64/Packages.gz
+ 21e6d0a8ccf9e5980d26afc02c806441d534eecdd279d0762b8ce232d59c3cd6 178 main/binary-amd64/Release
