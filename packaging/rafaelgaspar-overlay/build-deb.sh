@@ -21,6 +21,11 @@ DEBIAN="${PKG_ROOT}/DEBIAN"
 
 install -d -m 0755 "${DEBIAN}"
 install -d -m 0755 \
+  "${PKG_ROOT}/usr/lib/python3/dist-packages/xpra/scripts" \
+  "${PKG_ROOT}/usr/lib/python3/dist-packages/xpra/server/subsystem" \
+  "${PKG_ROOT}/usr/lib/python3/dist-packages/xpra/server/source" \
+  "${PKG_ROOT}/usr/lib/python3/dist-packages/xpra/server/window" \
+  "${PKG_ROOT}/usr/lib/python3/dist-packages/xpra/util" \
   "${PKG_ROOT}/usr/lib/python3/dist-packages/xpra/x11" \
   "${PKG_ROOT}/usr/lib/python3/dist-packages/xpra/x11/shadow" \
   "${PKG_ROOT}/usr/lib/python3/dist-packages/xpra/x11/server" \
@@ -30,10 +35,38 @@ install -m 0644 "${REPO_ROOT}/xpra/x11/wm.py" \
   "${PKG_ROOT}/usr/lib/python3/dist-packages/xpra/x11/wm.py"
 install -m 0644 "${REPO_ROOT}/xpra/x11/shadow/backends.py" \
   "${PKG_ROOT}/usr/lib/python3/dist-packages/xpra/x11/shadow/backends.py"
+install -m 0644 "${REPO_ROOT}/xpra/x11/shadow/server.py" \
+  "${PKG_ROOT}/usr/lib/python3/dist-packages/xpra/x11/shadow/server.py"
 install -m 0644 "${REPO_ROOT}/xpra/platform/posix/shadow_server.py" \
   "${PKG_ROOT}/usr/lib/python3/dist-packages/xpra/platform/posix/shadow_server.py"
 install -m 0644 "${REPO_ROOT}/xpra/x11/server/xtest_pointer.py" \
   "${PKG_ROOT}/usr/lib/python3/dist-packages/xpra/x11/server/xtest_pointer.py"
+install -m 0644 "${REPO_ROOT}/xpra/x11/server/seamless.py" \
+  "${PKG_ROOT}/usr/lib/python3/dist-packages/xpra/x11/server/seamless.py"
+install -m 0644 "${REPO_ROOT}/xpra/scripts/config.py" \
+  "${PKG_ROOT}/usr/lib/python3/dist-packages/xpra/scripts/config.py"
+install -m 0644 "${REPO_ROOT}/xpra/scripts/parsing.py" \
+  "${PKG_ROOT}/usr/lib/python3/dist-packages/xpra/scripts/parsing.py"
+install -m 0644 "${REPO_ROOT}/xpra/server/subsystem/command.py" \
+  "${PKG_ROOT}/usr/lib/python3/dist-packages/xpra/server/subsystem/command.py"
+install -m 0644 "${REPO_ROOT}/xpra/server/subsystem/desktop_server_events.py" \
+  "${PKG_ROOT}/usr/lib/python3/dist-packages/xpra/server/subsystem/desktop_server_events.py"
+install -m 0644 "${REPO_ROOT}/xpra/server/subsystem/display.py" \
+  "${PKG_ROOT}/usr/lib/python3/dist-packages/xpra/server/subsystem/display.py"
+install -m 0644 "${REPO_ROOT}/xpra/util/child_reaper.py" \
+  "${PKG_ROOT}/usr/lib/python3/dist-packages/xpra/util/child_reaper.py"
+install -m 0644 "${REPO_ROOT}/xpra/server/source/client_connection.py" \
+  "${PKG_ROOT}/usr/lib/python3/dist-packages/xpra/server/source/client_connection.py"
+install -m 0644 "${REPO_ROOT}/xpra/server/source/encoding.py" \
+  "${PKG_ROOT}/usr/lib/python3/dist-packages/xpra/server/source/encoding.py"
+install -m 0644 "${REPO_ROOT}/xpra/server/source/factory.py" \
+  "${PKG_ROOT}/usr/lib/python3/dist-packages/xpra/server/source/factory.py"
+install -m 0644 "${REPO_ROOT}/xpra/server/source/mmap.py" \
+  "${PKG_ROOT}/usr/lib/python3/dist-packages/xpra/server/source/mmap.py"
+install -m 0644 "${REPO_ROOT}/xpra/server/source/stub.py" \
+  "${PKG_ROOT}/usr/lib/python3/dist-packages/xpra/server/source/stub.py"
+install -m 0644 "${REPO_ROOT}/xpra/server/window/video_compress.py" \
+  "${PKG_ROOT}/usr/lib/python3/dist-packages/xpra/server/window/video_compress.py"
 
 bundle_html5=0
 if [[ -n "${HTML5_TARBALL}" ]]; then
