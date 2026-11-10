@@ -130,11 +130,19 @@ jobs:
             tag=$(git tag -l "${BASE_TAG}-rafaelgaspar.*" --points-at HEAD | sort -V | tail -1)
             body=$(gh release view "${tag}" --repo rafaelgaspar/xpra --json body -q .body) || body=""
             bundled=$(grep -oE 'xpra-html5 @ v[^ )]+' <<<"${body}" | head -1 | sed 's/^xpra-html5 @ //') || bundled=""
-            if [[ "${bundled}" != "${HTML5_TAG}" ]]; then
+            release_ok=true
+            if ! gh release view "${tag}" --repo rafaelgaspar/xpra >/dev/null 2>&1; then
+              release_ok=false
+            fi
+            if [[ "${bundled}" != "${HTML5_TAG}" ]] || [[ "${release_ok}" != "true" ]]; then
               latest=$(git tag -l "${BASE_TAG}-rafaelgaspar.*" | sort -V | tail -1)
               tag="${BASE_TAG}-rafaelgaspar.$((${latest##*.} + 1))"
               skip=false
-              echo "${tag}: the release of this commit bundles xpra-html5 ${bundled:-(unknown)}, not ${HTML5_TAG}"
+              if [[ "${release_ok}" != "true" ]]; then
+                echo "${tag}: integration tag exists but GitHub release is missing"
+              else
+                echo "${tag}: the release of this commit bundles xpra-html5 ${bundled:-(unknown)}, not ${HTML5_TAG}"
+              fi
             fi
           fi
           {
@@ -203,20 +211,37 @@ jobs:
           TAG: ${{ steps.decide.outputs.tag }}
           DEB: dist/xpra-rafaelgaspar-overlay_${{ steps.decide.outputs.deb_version }}_all.deb
         run: |
-          body=$(cat <<EOF
+          set -euo pipefail
+          build_full="${{ steps.debian_ver.outputs.build_full }}"
+          if [ "${build_full}" = "true" ]; then
+            body=$(cat <<EOF
+          rafaelgaspar integration release based on upstream ${{ steps.release.outputs.base_tag }}.
+
+          Full Debian packages built from this tree (install via \`deb-manifest.txt\`).
+          HTML5 www tree staged from xpra-html5 @ ${{ steps.html5.outputs.html5_tag }}.
+          Client tarball: [rafaelgaspar/xpra-html5](https://github.com/rafaelgaspar/xpra-html5/releases/tag/${{ steps.html5.outputs.html5_tag }})
+          EOF
+            )
+          else
+            body=$(cat <<EOF
           rafaelgaspar integration release based on upstream ${{ steps.release.outputs.base_tag }}.
 
           - \`xpra-rafaelgaspar-overlay\` Debian package (dpkg-divert; Python patches + HTML5 www tree from rafaelgaspar/xpra-html5 @ ${{ steps.html5.outputs.html5_tag }})
           - HTML5 client tarball is published only on [rafaelgaspar/xpra-html5](https://github.com/rafaelgaspar/xpra-html5/releases/tag/${{ steps.html5.outputs.html5_tag }})
           EOF
-          )
-          assets=()
+            )
+          fi
+          mapfile -t assets < <(find dist/debian -maxdepth 1 -name '*.deb' ! -name 'xpra-build-deps_*' -type f | sort)
+          if [ -f dist/debian/deb-manifest.txt ]; then
+            manifest_lines=$(grep -cve '^[[:space:]]*$' dist/debian/deb-manifest.txt || true)
+            if [ "${manifest_lines}" -eq 0 ]; then
+              echo "deb-manifest.txt is empty" >&2
+              exit 1
+            fi
+            assets+=(dist/debian/deb-manifest.txt)
+          fi
           if [ -f "${DEB}" ]; then
             assets+=("${DEB}")
-          fi
-          if [ -f dist/debian/deb-manifest.txt ]; then
-            assets+=(dist/debian/*.deb)
-            assets+=(dist/debian/deb-manifest.txt)
           fi
           if [ ${#assets[@]} -eq 0 ]; then
             echo "no release assets built" >&2

@@ -65,26 +65,46 @@ debuild -b -us -uc
 
 shopt -s nullglob
 for deb in ../*.deb; do
+  base=$(basename "$deb")
+  [[ "$base" == xpra-build-deps_* ]] && continue
   cp -a "$deb" "$OUT_DIR/"
 done
 
 MANIFEST="$OUT_DIR/deb-manifest.txt"
+INSTALL_ORDER=(
+  xpra-common
+  xpra-codecs
+  xpra-codecs-extras
+  xpra-codecs-nvidia
+  xpra-codecs-amd
+  xpra-x11
+  xpra-audio
+  xpra-audio-server
+  xpra-server
+  xpra-server-wayland
+  xpra-wayland
+  xpra-html5
+  xpra
+)
+listed=()
+emit_deb() {
+  local base=$1
+  [[ " ${listed[*]} " == *" $base "* ]] && return 0
+  listed+=("$base")
+  printf '%s\n' "$base"
+}
 {
-  for pattern in \
-    xpra-common_*_all.deb \
-    xpra-codecs_*_amd64.deb \
-    xpra-codecs-extras_*_amd64.deb \
-    xpra-codecs-nvidia_*_amd64.deb \
-    xpra-x11_*_amd64.deb \
-    xpra-audio_*_amd64.deb \
-    xpra-audio-server_*_amd64.deb \
-    xpra-server_*_amd64.deb \
-    xpra-html5_*_all.deb \
-    xpra_*_amd64.deb; do
-    for f in "$OUT_DIR"/$pattern; do
-      [[ -f "$f" ]] && basename "$f"
+  for pkg in "${INSTALL_ORDER[@]}"; do
+    for f in "$OUT_DIR"/${pkg}_*.deb; do
+      [[ -f "$f" ]] && emit_deb "$(basename "$f")"
     done
+  done
+  for f in "$OUT_DIR"/xpra-*.deb "$OUT_DIR"/xpra_*.deb; do
+    [[ -f "$f" ]] || continue
+    emit_deb "$(basename "$f")"
   done
 } >"$MANIFEST"
 
-echo "built $(wc -l <"$MANIFEST") debs -> $OUT_DIR"
+count=$(wc -l <"$MANIFEST")
+[[ "$count" -gt 0 ]] || { echo "no debs matched for manifest" >&2; exit 1; }
+echo "built ${count} debs -> $OUT_DIR"
