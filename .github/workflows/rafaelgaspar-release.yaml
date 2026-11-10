@@ -111,7 +111,7 @@ jobs:
           fi
           if [[ -z "${html5_tag}" ]]; then
             html5_tag=$(gh release list --repo rafaelgaspar/xpra-html5 --limit 20 --json tagName \
-              -q '[.[].tagName[] | select(contains("rafaelgaspar."))] | sort | last // empty')
+              -q '[.[].tagName | select(contains("rafaelgaspar."))] | sort | last // empty' || true)
           fi
           [[ -n "${html5_tag}" ]] || { echo "No rafaelgaspar integration tag on xpra-html5 HEAD; release xpra-html5 first"; exit 1; }
           html5_version="${html5_tag#v}"
