@@ -54,9 +54,20 @@ jobs:
 
       - name: Resolve integration tag
         id: release
+        env:
+          UPSTREAM_TAG_INPUT: ${{ inputs.upstream_tag }}
         run: |
+          set -euo pipefail
+          integration_base="${UPSTREAM_TAG_INPUT}"
+          if [[ -z "${integration_base}" ]]; then
+            git fetch --depth=1 upstream v7.x:v7.x
+            merge=$(git merge-base HEAD upstream/v7.x)
+            short=$(git rev-parse --short=7 "${merge}")
+            ver=$(git show "${merge}:xpra/__init__.py" | sed -n 's/^__version__ = "\([^"]*\)".*/\1/p' | head -1)
+            integration_base="v${ver}-${short}"
+          fi
           chmod +x ./.github/scripts/resolve-integration-tag.sh
-          ./.github/scripts/resolve-integration-tag.sh 'v*.*.*' '^v[0-9]+\.[0-9]+\.[0-9]+$' "${{ inputs.upstream_tag }}"
+          ./.github/scripts/resolve-integration-tag.sh 'v*.*.*' '^v[0-9]+\.[0-9]+\.[0-9]+$' "${integration_base}"
           integration_version=$(grep '^integration_version=' "$GITHUB_OUTPUT" | tail -1 | cut -d= -f2-)
           base_tag=$(grep '^base_tag=' "$GITHUB_OUTPUT" | tail -1 | cut -d= -f2-)
           pkg_ver=$(grep '^package_upstream_version=' "$GITHUB_OUTPUT" | tail -1 | cut -d= -f2-)
@@ -207,4 +218,4 @@ jobs:
             --title "${TAG}" \
             --notes "${body}" \
             --target rafaelgaspar \
-            "${assets[@]}""
+            "${assets[@]}"
