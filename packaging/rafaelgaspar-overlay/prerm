@@ -6,7 +6,6 @@ PY_REL_PATHS="
 scripts/config.py
 scripts/parsing.py
 server/subsystem/command.py
-server/subsystem/desktop_server_events.py
 server/subsystem/display.py
 server/source/client_connection.py
 server/source/encoding.py

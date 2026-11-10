@@ -49,8 +49,6 @@ install -m 0644 "${REPO_ROOT}/xpra/scripts/parsing.py" \
   "${PKG_ROOT}/usr/lib/python3/dist-packages/xpra/scripts/parsing.py"
 install -m 0644 "${REPO_ROOT}/xpra/server/subsystem/command.py" \
   "${PKG_ROOT}/usr/lib/python3/dist-packages/xpra/server/subsystem/command.py"
-install -m 0644 "${REPO_ROOT}/xpra/server/subsystem/desktop_server_events.py" \
-  "${PKG_ROOT}/usr/lib/python3/dist-packages/xpra/server/subsystem/desktop_server_events.py"
 install -m 0644 "${REPO_ROOT}/xpra/server/subsystem/display.py" \
   "${PKG_ROOT}/usr/lib/python3/dist-packages/xpra/server/subsystem/display.py"
 install -m 0644 "${REPO_ROOT}/xpra/util/child_reaper.py" \
