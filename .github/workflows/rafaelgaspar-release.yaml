@@ -202,6 +202,10 @@ jobs:
             -v "${GITHUB_WORKSPACE}:/work" -w /work \
             "${FORKY_IMAGE}" \
             bash -euxo pipefail -c '
+              if [[ -f /etc/apt/sources.list.d/debian.sources ]]; then
+                sed -i "s/Components: main/Components: main contrib non-free non-free-firmware/" \
+                  /etc/apt/sources.list.d/debian.sources
+              fi
               apt-get update
               apt-get install -y --no-install-recommends \
                 build-essential debhelper devscripts dh-python dpkg-dev equivs fakeroot \
@@ -236,7 +240,8 @@ jobs:
           mkdir -p "${pages_dir}/apt"
           key_mount=()
           if [[ -n "${APT_REPO_GPG_PRIVATE_KEY:-}" ]]; then
-            install -m 600 /dev/null "${RUNNER_TEMP}/apt-signing.key"
+            install -m 600 /dev/null "${RUNNER_TEMP}/apt-signing.key" 2>/dev/null || \
+              { : >"${RUNNER_TEMP}/apt-signing.key"; chmod 600 "${RUNNER_TEMP}/apt-signing.key"; }
             printf '%s' "$APT_REPO_GPG_PRIVATE_KEY" >"${RUNNER_TEMP}/apt-signing.key"
             key_mount=(-v "${RUNNER_TEMP}/apt-signing.key:/apt-signing.key:ro")
           fi
