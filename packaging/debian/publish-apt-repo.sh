@@ -12,7 +12,7 @@ SUITE="${RAFAELGASPAR_DEBIAN_SUITE:-forky}"
 mkdir -p "$REPO_DIR/conf"
 
 SIGN_WITH="!"
-if [[ -n "${APT_SIGN_KEY_ID:-}" ]]; then
+if [[ -n "${APT_SIGN_KEY_ID:-}" && -n "${APT_REPO_GPG_PRIVATE_KEY:-}" ]]; then
   SIGN_WITH="${APT_SIGN_KEY_ID}"
 fi
 
