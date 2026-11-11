@@ -36,6 +36,9 @@ ln -sf packaging/debian/xpra debian
 
 CODENAME="$(lsb_release -cs 2>/dev/null || echo trixie)"
 perl -i.bak -pe "s/#${CODENAME}:/#${CODENAME}:\\n/g" debian/control
+# Snapshot CUDA pins NVIDIA 550.x; rolling libnvidia-fbc1 wants a newer driver.
+# NVFBC is capture — NVENC does not need it.
+sed -i '/libnvidia-fbc1/d' debian/control
 # debuild strips EXTRA_BUILDOPTS; bake --with-nvenc into debian/rules.
 sed -i '/^BUILDOPTS :=/s/$/ --with-nvenc/' debian/rules
 
@@ -50,13 +53,19 @@ EOF
 export DEB_BUILD_OPTIONS="${DEB_BUILD_OPTIONS:-} noddebs"
 export PIP_BREAK_SYSTEM_PACKAGES=1
 
-# Rolling forky currently ships no nvidia-cuda-toolkit (main/contrib/non-free).
-# Pin the same snapshot stack k3s-home uses so nvcc and CUDA kernels build.
-DEBIAN_APT_SNAPSHOT="${DEBIAN_APT_SNAPSHOT:-20250928T220000Z}"
 if [[ -f /etc/apt/sources.list.d/debian.sources ]]; then
   "${SUDO[@]}" sed -i 's/Components: main/Components: main contrib non-free non-free-firmware/' \
     /etc/apt/sources.list.d/debian.sources || true
 fi
+"${SUDO[@]}" apt-get update
+"${SUDO[@]}" mk-build-deps --install \
+  --tool='apt-get -o Debug::pkgProblemResolver=yes --no-install-recommends --yes' \
+  debian/control
+rm -f xpra-build-deps* 2>/dev/null || true
+
+# Rolling forky currently ships no nvidia-cuda-toolkit (main/contrib/non-free).
+# Pin the same snapshot stack k3s-home uses so nvcc and CUDA kernels build.
+DEBIAN_APT_SNAPSHOT="${DEBIAN_APT_SNAPSHOT:-20250928T220000Z}"
 "${SUDO[@]}" tee /etc/apt/apt.conf.d/99debian-snapshot >/dev/null <<'EOF'
 Acquire::Check-Valid-Until "false";
 EOF
@@ -74,7 +83,7 @@ Pin-Priority: 1001
 EOF
 "${SUDO[@]}" apt-get update
 "${SUDO[@]}" env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-  pkgconf curl ca-certificates gcc \
+  curl ca-certificates \
   nvidia-cuda-toolkit nvidia-cuda-dev
 
 multiarch="$(dpkg-architecture -qDEB_HOST_MULTIARCH 2>/dev/null || echo x86_64-linux-gnu)"
@@ -124,10 +133,6 @@ command -v nvcc >/dev/null || {
   exit 1
 }
 
-"${SUDO[@]}" mk-build-deps --install \
-  --tool='apt-get -o Debug::pkgProblemResolver=yes --no-install-recommends --yes' \
-  debian/control
-rm -f xpra-build-deps* 2>/dev/null || true
 "${SUDO[@]}" env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends python3-pip
 "${SUDO[@]}" env DEBIAN_FRONTEND=noninteractive apt-get remove -y cython3 2>/dev/null || true
 python3 -m pip install --upgrade 'cython>=3'
