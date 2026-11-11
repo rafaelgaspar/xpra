@@ -36,6 +36,11 @@ ln -sf packaging/debian/xpra debian
 
 CODENAME="$(lsb_release -cs 2>/dev/null || echo trixie)"
 perl -i.bak -pe "s/#${CODENAME}:/#${CODENAME}:\\n/g" debian/control
+# Rolling forky's OpenJPH SONAME is 0.33; the forky: control line still names
+# 0.28. Uncommenting both plus shlibdeps makes xpra-codecs uninstallable.
+if [[ "$CODENAME" == forky ]]; then
+  sed -i 's/^[[:space:]]*,libopenjph0\.28$/              ,libopenjph0.33/' debian/control
+fi
 # debuild strips EXTRA_BUILDOPTS; bake --with-nvenc into debian/rules.
 sed -i '/^BUILDOPTS :=/s/$/ --with-nvenc/' debian/rules
 
