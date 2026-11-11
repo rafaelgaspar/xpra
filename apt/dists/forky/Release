@@ -2,19 +2,19 @@ Origin: rafaelgaspar
 Label: rafaelgaspar integration
 Suite: forky
 Codename: forky
-Date: Wed, 11 Nov 2026 07:37:45 UTC
+Date: Wed, 11 Nov 2026 08:02:09 UTC
 Architectures: amd64
 Components: main
 Description: rafaelgaspar integration for Debian forky
 MD5Sum:
- 32ff6ca56b81454a2598cd66c578e0e6 17475 main/binary-amd64/Packages
- 2325a7bc61544407e70ac801d21b02fe 4377 main/binary-amd64/Packages.gz
+ ed4eda5d283fc7e3da09696dfb84b124 17459 main/binary-amd64/Packages
+ fa189bc98ac3ccb7c4489978d16859b5 4358 main/binary-amd64/Packages.gz
  70cf092a29aaba9ecd52e7461a1f3832 159 main/binary-amd64/Release
 SHA1:
- a9e9410e0865f412447b731c2c4a0c2b1ac20458 17475 main/binary-amd64/Packages
- 2c8d912eb41f6829dcaabbb1925a9af9c5547cd8 4377 main/binary-amd64/Packages.gz
+ be75d2c0e5da4c981033a1bc62e8531568524f73 17459 main/binary-amd64/Packages
+ e5467a7c40590347e2423fce0f3d143030a4bcdc 4358 main/binary-amd64/Packages.gz
  be732b669f6433a86961fa24f44e873fea66afa3 159 main/binary-amd64/Release
 SHA256:
- 5fe6e6cf7e08194a8ad497d43122f022824bbd2087e6c6dbff8d4b2c29b0c720 17475 main/binary-amd64/Packages
- 9a093ce515ae8bc775371cf792ef995c28683c309808854c50cbd95fd1f1d841 4377 main/binary-amd64/Packages.gz
+ a5b5ab5a280c2608a96f04e3e43e4c59c7a375da034967ff0fab375dba3e0545 17459 main/binary-amd64/Packages
+ 5eee93b2c13bae8b9d3e235415982dd36c8412e5dfe60ee091659ba37910529c 4358 main/binary-amd64/Packages.gz
  be557e7145db25b0f67c731bf4767828343ac3baa3ff1b9bf3298d7100a429d8 159 main/binary-amd64/Release
