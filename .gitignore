@@ -232,3 +232,7 @@ tests/unittests/test-file*
 
 # macos build logs:
 /packaging/MacOS/logs/
+
+# fork-pack CI checkout and tag-bump log (never commit)
+.fork-pack/
+rebuild.log
