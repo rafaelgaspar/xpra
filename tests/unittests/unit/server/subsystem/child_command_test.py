@@ -37,7 +37,6 @@ class ChildCommandMixinTest(ServerMixinTest):
         opts.start_new_commands = True
         opts.start = []
         opts.start_child = []
-        opts.adopt_children = []
         opts.start_late = []
         opts.start_child_late = []
         opts.start_after_connect = []

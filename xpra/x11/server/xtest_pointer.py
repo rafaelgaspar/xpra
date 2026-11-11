@@ -4,9 +4,6 @@
 # Xpra is released under the terms of the GNU GPL v2, or, at your option, any
 # later version. See the file COPYING for details.
 
-import ctypes
-import os
-
 from xpra.x11.error import xsync
 from xpra.x11.bindings.core import X11CoreBindings, get_root_xid
 from xpra.x11.bindings.test import XTestBindings
@@ -14,60 +11,6 @@ from xpra.x11.bindings.window import X11WindowBindings
 from xpra.log import Logger
 
 log = Logger("x11", "server", "pointer")
-
-# Fork patch: XTestFakeMotionEvent hardcodes screen_number=0 at compile
-# time (xpra/x11/bindings/test.pyx: "DEF screen_number = 0"), so on a real
-# multi-screen X server (DISPLAY=:N.M with M != 0) every synthetic pointer move lands on screen 0 instead of the
-# screen this xpra server is actually bound to -- button_action handling
-# calls move_pointer() with the click's own coordinates before pressing the
-# button (xpra/server/subsystem/pointer.py do_process_mouse_common), so this
-# breaks clicks too, not just standalone motion. Warp the pointer via a
-# direct ctypes call to XWarpPointer instead, which does take an explicit
-# destination window (and therefore screen); xtest_fake_button has no screen
-# parameter and acts on wherever the pointer currently is, so it needs no
-# change once the pointer is warped correctly first.
-_libx11 = None
-_x11_display = None
-_x11_root_window = None
-
-
-def _x11_root():
-    global _libx11, _x11_display, _x11_root_window
-    if _x11_root_window is not None:
-        return _libx11, _x11_display, _x11_root_window
-    lib = ctypes.CDLL("libX11.so.6")
-    lib.XOpenDisplay.restype = ctypes.c_void_p
-    lib.XOpenDisplay.argtypes = [ctypes.c_char_p]
-    # None -> NULL -> Xlib falls back to getenv("DISPLAY") itself, same as
-    # every other X11 client in this process.
-    display = lib.XOpenDisplay(None)
-    if not display:
-        raise RuntimeError(f"XOpenDisplay failed for DISPLAY={os.environ.get('DISPLAY')!r}")
-    lib.XDefaultRootWindow.restype = ctypes.c_ulong
-    lib.XDefaultRootWindow.argtypes = [ctypes.c_void_p]
-    root = lib.XDefaultRootWindow(display)
-    lib.XWarpPointer.argtypes = [
-        ctypes.c_void_p, ctypes.c_ulong, ctypes.c_ulong,
-        ctypes.c_int, ctypes.c_int, ctypes.c_uint, ctypes.c_uint,
-        ctypes.c_int, ctypes.c_int,
-    ]
-    lib.XFlush.argtypes = [ctypes.c_void_p]
-    _libx11, _x11_display, _x11_root_window = lib, display, root
-    return lib, display, root
-
-
-def _warp_pointer(x: int, y: int) -> bool:
-    try:
-        lib, display, root = _x11_root()
-    except Exception as e:
-        log.warn("Warning: failed to open a direct X11 connection for pointer warp: %s", e)
-        return False
-    # src_w=0 (X11 "None" -- no source-window constraint), dest_w=root of
-    # our own screen, dest_x/y absolute within it -- moves the pointer onto
-    # this screen regardless of which screen XTest itself defaults to.
-    lib.XWarpPointer(display, 0, root, 0, 0, 0, 0, x, y)
-    lib.XFlush(display)
-    return True
 
 
 class XTestPointerDevice:
@@ -84,13 +27,12 @@ class XTestPointerDevice:
     def move_pointer(self, x: int, y: int, props: dict) -> None:
         log("xtest_fake_motion%s", (x, y, props))
         with xsync:
-            if not _warp_pointer(x, y):
-                if self.multi_screen and not X11CoreBindings().is_pointer_on_screen():
-                    # XTest motion events stay on the screen the pointer is currently on,
-                    # so warp it to our screen first:
-                    log("pointer is on another screen, warping it to %s", (x, y))
-                    X11WindowBindings().XWarpPointer(0, get_root_xid(), 0, 0, 0, 0, x, y)
-                XTestBindings().xtest_fake_motion(x, y)
+            if self.multi_screen and not X11CoreBindings().is_pointer_on_screen():
+                # XTest motion events stay on the screen the pointer is currently on,
+                # so warp it to our screen first:
+                log("pointer is on another screen, warping it to %s", (x, y))
+                X11WindowBindings().XWarpPointer(0, get_root_xid(), 0, 0, 0, 0, x, y)
+            XTestBindings().xtest_fake_motion(x, y)
 
     # noinspection PyInconsistentReturns
     @staticmethod
