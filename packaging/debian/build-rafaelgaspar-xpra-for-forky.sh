@@ -36,11 +36,6 @@ ln -sf packaging/debian/xpra debian
 
 CODENAME="$(lsb_release -cs 2>/dev/null || echo trixie)"
 perl -i.bak -pe "s/#${CODENAME}:/#${CODENAME}:\\n/g" debian/control
-# Rolling forky's OpenJPH SONAME is 0.33; the forky: control line still names
-# 0.28. Uncommenting both plus shlibdeps makes xpra-codecs uninstallable.
-if [[ "$CODENAME" == forky ]]; then
-  sed -i 's/^[[:space:]]*,libopenjph0\.28$/              ,libopenjph0.33/' debian/control
-fi
 # debuild strips EXTRA_BUILDOPTS; bake --with-nvenc into debian/rules.
 sed -i '/^BUILDOPTS :=/s/$/ --with-nvenc/' debian/rules
 
@@ -165,6 +160,7 @@ command -v nvcc >/dev/null || {
   --tool='apt-get -o Debug::pkgProblemResolver=yes --no-install-recommends --yes' \
   debian/control
 rm -f xpra-build-deps* 2>/dev/null || true
+python3 "${REPO_ROOT}/packaging/debian/verify-forky-rewrite-sonames.py" debian/control
 "${SUDO[@]}" env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends python3-pip
 "${SUDO[@]}" env DEBIAN_FRONTEND=noninteractive apt-get remove -y cython3 2>/dev/null || true
 python3 -m pip install --upgrade 'cython>=3'
@@ -187,6 +183,11 @@ for deb in ../*.deb; do
   [[ "$base" == xpra-build-deps_* ]] && continue
   cp -a "$deb" "$OUT_DIR/"
 done
+
+shopt -s nullglob
+verify_debs=("$OUT_DIR"/xpra*.deb "$OUT_DIR"/xpra_*.deb)
+shopt -u nullglob
+"${REPO_ROOT}/packaging/debian/verify-forky-deb-depends.sh" "${verify_debs[@]}"
 
 nvidia_debs=("$OUT_DIR"/xpra-codecs-nvidia_*.deb)
 [[ -f ${nvidia_debs[0]} ]] || {

@@ -422,7 +422,7 @@ Depends: xpra-common (= ${binary:Version})
 #resolute:              ,libopenjph0.26
 #stonking:              ,libopenjph0.28
 #trixie:              ,libopenjph0.21
-#forky:              ,libopenjph0.28
+#forky:              ,libopenjph0.33
 #sid:              ,libopenjph0.28
               ,libaom3
 #jammy:              ,libvpl2 [amd64]
