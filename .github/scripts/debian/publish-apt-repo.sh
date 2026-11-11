@@ -9,7 +9,7 @@
 #   APT_ORIGIN                  (default: rafaelgaspar)
 #   APT_LABEL                   (default: rafaelgaspar integration)
 #   APT_DESCRIPTION             (optional; defaults from APT_LABEL + suite)
-#   APT_ARCHITECTURES           (default: amd64 all)
+#   APT_ARCHITECTURES           (default: amd64; reprepro forbids "all")
 #   APT_COMPONENTS              (default: main)
 #   APT_GPG_ASC_FILENAME        (default: rafaelgaspar-apt.gpg.asc)
 #   APT_DEB_SKIP_PATTERN        (grep -E; default: xpra-build-deps_)
@@ -21,7 +21,18 @@ DEB_DIR="${2:?directory containing .deb files}"
 SUITE="${RAFAELGASPAR_DEBIAN_SUITE:-forky}"
 ORIGIN="${APT_ORIGIN:-rafaelgaspar}"
 LABEL="${APT_LABEL:-rafaelgaspar integration}"
-ARCHITECTURES="${APT_ARCHITECTURES:-amd64 all}"
+# reprepro: "Distribution … contains an architecture called 'all'".
+# Architecture: all debs still index under the real arches listed here.
+ARCHITECTURES="${APT_ARCHITECTURES:-amd64}"
+read -r -a _apt_arches <<< "$ARCHITECTURES"
+_apt_filtered=()
+for _a in "${_apt_arches[@]}"; do
+  [[ $_a == all ]] && continue
+  _apt_filtered+=("$_a")
+done
+((${#_apt_filtered[@]} > 0)) || _apt_filtered=(amd64)
+ARCHITECTURES="${_apt_filtered[*]}"
+unset _apt_arches _apt_filtered _a
 COMPONENTS="${APT_COMPONENTS:-main}"
 GPG_ASC="${APT_GPG_ASC_FILENAME:-rafaelgaspar-apt.gpg.asc}"
 SKIP_PATTERN="${APT_DEB_SKIP_PATTERN:-xpra-build-deps_}"

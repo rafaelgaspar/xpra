@@ -368,7 +368,8 @@ PY
 
 # Overlay fork-owned files onto the new upstream tag. Never cherry-pick the old
 # ROOT commit: that patch edits upstream workflows/README and conflicts whenever
-# upstream touches the same files.
+# upstream touches the same files. packaging/debian/build-rafaelgaspar-* (and
+# sibling apt helpers) must be copied or squash drops them from the overlay.
 apply_root_layer_tree() {
   local parent_ref=$1
   local tree_ref=$2
@@ -376,7 +377,7 @@ apply_root_layer_tree() {
 
   mapfile -t paths < <(
     git ls-tree -r --name-only "$tree_ref" \
-      | grep -E '^(\.github/(scripts/|workflows/rafaelgaspar-)|\.cursor/skills|\.claude/skills|packaging/rafaelgaspar-overlay)' \
+      | grep -E '^(\.github/(scripts/|workflows/rafaelgaspar-)|\.cursor/skills|\.claude/skills|packaging/(rafaelgaspar-overlay|debian/(build-rafaelgaspar-|publish-apt-|verify-forky-)))' \
       || true
   )
   if ((${#paths[@]} > 0)); then
