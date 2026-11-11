@@ -36,9 +36,6 @@ ln -sf packaging/debian/xpra debian
 
 CODENAME="$(lsb_release -cs 2>/dev/null || echo trixie)"
 perl -i.bak -pe "s/#${CODENAME}:/#${CODENAME}:\\n/g" debian/control
-# Snapshot CUDA pins NVIDIA 550.x; rolling libnvidia-fbc1 wants a newer driver.
-# NVFBC is capture — NVENC does not need it.
-sed -i '/libnvidia-fbc1/d' debian/control
 # debuild strips EXTRA_BUILDOPTS; bake --with-nvenc into debian/rules.
 sed -i '/^BUILDOPTS :=/s/$/ --with-nvenc/' debian/rules
 
@@ -57,14 +54,12 @@ if [[ -f /etc/apt/sources.list.d/debian.sources ]]; then
   "${SUDO[@]}" sed -i 's/Components: main/Components: main contrib non-free non-free-firmware/' \
     /etc/apt/sources.list.d/debian.sources || true
 fi
-"${SUDO[@]}" apt-get update
-"${SUDO[@]}" mk-build-deps --install \
-  --tool='apt-get -o Debug::pkgProblemResolver=yes --no-install-recommends --yes' \
-  debian/control
-rm -f xpra-build-deps* 2>/dev/null || true
 
-# Rolling forky currently ships no nvidia-cuda-toolkit (main/contrib/non-free).
-# Pin the same snapshot stack k3s-home uses so nvcc and CUDA kernels build.
+# Rolling forky currently ships no nvidia-cuda-toolkit. Pin the same snapshot
+# CUDA + NVIDIA 550.x userspace k3s-home uses for compiles (host ms01vm is
+# 620.x from NVIDIA's apt; older toolkit on a newer driver is the usual pairing).
+# libnvidia-fbc1 must come from this snapshot too: rolling fbc1 wants a newer
+# libcuda1 than 550.x and apt then drops xpra-build-deps.
 DEBIAN_APT_SNAPSHOT="${DEBIAN_APT_SNAPSHOT:-20250928T220000Z}"
 "${SUDO[@]}" tee /etc/apt/apt.conf.d/99debian-snapshot >/dev/null <<'EOF'
 Acquire::Check-Valid-Until "false";
@@ -77,14 +72,15 @@ Components: main contrib non-free non-free-firmware
 Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
 EOF
 "${SUDO[@]}" tee /etc/apt/preferences.d/debian-cuda-snapshot >/dev/null <<'EOF'
-Package: glx-alternative-mesa glx-alternative-nvidia glx-diversions libaccinj64-12.4 libcu++-dev libcub-dev libcublas12 libcublaslt12 libcuda1 libcudart12 libcufft11 libcufftw11 libcuinj64-12.4 libcupti-dev libcupti12 libcurand10 libcusolver11 libcusolvermg11 libcusparse12 libnppc12 libnppial12 libnppicc12 libnppidei12 libnppif12 libnppig12 libnppim12 libnppist12 libnppisu12 libnppitc12 libnpps12 libnvblas12 libnvfatbin12 libnvidia-ml-dev libnvidia-ml1 libnvidia-pkcs11-openssl3 libnvidia-ptxjitcompiler1 libnvjitlink12 libnvjpeg12 libnvrtc-builtins12.4 libnvrtc12 libnvtoolsext1 libnvvm4 libthrust-dev nvidia-alternative nvidia-cuda-dev nvidia-cuda-toolkit nvidia-installer-cleanup nvidia-legacy-check nvidia-opencl-dev nvidia-profiler nvidia-support update-glx
+Package: glx-alternative-mesa glx-alternative-nvidia glx-diversions libaccinj64-12.4 libcu++-dev libcub-dev libcublas12 libcublaslt12 libcuda1 libcudart12 libcufft11 libcufftw11 libcuinj64-12.4 libcupti-dev libcupti12 libcurand10 libcusolver11 libcusolvermg11 libcusparse12 libnppc12 libnppial12 libnppicc12 libnppidei12 libnppif12 libnppig12 libnppim12 libnppist12 libnppisu12 libnppitc12 libnpps12 libnvblas12 libnvcuvid1 libnvfatbin12 libnvidia-encode1 libnvidia-fbc1 libnvidia-ml-dev libnvidia-ml1 libnvidia-pkcs11-openssl3 libnvidia-ptxjitcompiler1 libnvjitlink12 libnvjpeg12 libnvrtc-builtins12.4 libnvrtc12 libnvtoolsext1 libnvvm4 libthrust-dev nvidia-alternative nvidia-cuda-dev nvidia-cuda-toolkit nvidia-installer-cleanup nvidia-legacy-check nvidia-opencl-dev nvidia-profiler nvidia-support update-glx
 Pin: origin snapshot.debian.org
 Pin-Priority: 1001
 EOF
 "${SUDO[@]}" apt-get update
 "${SUDO[@]}" env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
   curl ca-certificates \
-  nvidia-cuda-toolkit nvidia-cuda-dev
+  nvidia-cuda-toolkit nvidia-cuda-dev \
+  libnvidia-fbc1 libnvidia-encode1
 
 multiarch="$(dpkg-architecture -qDEB_HOST_MULTIARCH 2>/dev/null || echo x86_64-linux-gnu)"
 hdr_stage="$(mktemp -d)"
@@ -133,6 +129,10 @@ command -v nvcc >/dev/null || {
   exit 1
 }
 
+"${SUDO[@]}" mk-build-deps --install \
+  --tool='apt-get -o Debug::pkgProblemResolver=yes --no-install-recommends --yes' \
+  debian/control
+rm -f xpra-build-deps* 2>/dev/null || true
 "${SUDO[@]}" env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends python3-pip
 "${SUDO[@]}" env DEBIAN_FRONTEND=noninteractive apt-get remove -y cython3 2>/dev/null || true
 python3 -m pip install --upgrade 'cython>=3'
@@ -142,7 +142,9 @@ if [[ -z "$CYTHON_BIN" || ! -x "$CYTHON_BIN" ]]; then
   exit 1
 fi
 "${SUDO[@]}" install -d /usr/local/bin
-"${SUDO[@]}" ln -sf "$CYTHON_BIN" /usr/local/bin/cython
+if [[ "$CYTHON_BIN" != /usr/local/bin/cython ]]; then
+  "${SUDO[@]}" ln -sfn "$CYTHON_BIN" /usr/local/bin/cython
+fi
 
 debuild -b -us -uc
 "${REPO_ROOT}/packaging/debian/verify-debs.sh" ../*.deb
