@@ -78,7 +78,7 @@ Pin-Priority: 1001
 EOF
 "${SUDO[@]}" apt-get update
 "${SUDO[@]}" env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-  curl ca-certificates \
+  curl ca-certificates pkgconf gcc \
   nvidia-cuda-toolkit nvidia-cuda-dev \
   libnvidia-fbc1 libnvidia-encode1
 
