@@ -142,8 +142,18 @@ jobs:
               release_ok=false
             fi
             if [[ "${bundled}" != "${HTML5_TAG}" ]] || [[ "${release_ok}" != "true" ]]; then
-              latest=$(git tag -l "${BASE_TAG}-rafaelgaspar.*" | sort -V | tail -1)
-              tag="${BASE_TAG}-rafaelgaspar.$((${latest##*.} + 1))"
+              ver="${BASE_TAG#v}"
+              ver="${ver%%-*}"
+              max=-1
+              while IFS= read -r t; do
+                [[ -z $t ]] && continue
+                n=${t##*.}
+                [[ $n =~ ^[0-9]+$ ]] || continue
+                if (( n > max )); then
+                  max=$n
+                fi
+              done < <(git tag -l "v${ver}-*-rafaelgaspar."*)
+              tag="${BASE_TAG}-rafaelgaspar.$((max + 1))"
               skip=false
               if [[ "${release_ok}" != "true" ]]; then
                 echo "${tag}: integration tag exists but GitHub release is missing"
@@ -221,6 +231,7 @@ jobs:
           TAG: ${{ steps.decide.outputs.tag }}
           FORKY_IMAGE: debian:forky@sha256:49c219ade93d7c11635c0d57e735ed82339a503a4376cd6957046c2bd4e5905b
           APT_SIGN_KEY_ID: ${{ vars.APT_SIGN_KEY_ID }}
+          APT_GPG_ASC_FILENAME: rafaelgaspar-xpra.gpg.asc
           APT_REPO_GPG_PRIVATE_KEY: ${{ secrets.APT_REPO_GPG_PRIVATE_KEY }}
           APT_REPO_GPG_PUBLIC_ARMOR: ${{ secrets.APT_REPO_GPG_PUBLIC_ARMOR }}
         run: |
@@ -252,6 +263,7 @@ jobs:
           docker run --rm \
             -e DEBIAN_FRONTEND=noninteractive \
             -e RAFAELGASPAR_DEBIAN_SUITE=forky \
+            -e APT_GPG_ASC_FILENAME \
             -e APT_SIGN_KEY_ID \
             -e APT_REPO_GPG_PUBLIC_ARMOR \
             "${signing_env[@]}" \

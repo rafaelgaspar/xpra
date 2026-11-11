@@ -5,6 +5,10 @@
 # Pass [base-tag] from tag-bump (upstream release tag, or v{ver}-{shortsha}
 # when tracks:branch). Inferring with `git tag --merged HEAD` is wrong when checkout
 # used the triggering github.sha (the pre-rebuild rafaelgaspar tip).
+#
+# N is global for the Debian upstream version (all v7.0-<sha>-rafaelgaspar.N
+# tags share one counter). Hash-based Debian versions are not monotonic, so
+# resetting N per sha lets apt/reprepro treat a new hash as older.
 set -euo pipefail
 
 tag_glob="${1:?tag glob}"
@@ -21,6 +25,21 @@ package_upstream_version() {
     return 0
   fi
   printf '%s\n' "${base#v}"
+}
+
+# Highest rafaelgaspar.N among every sha of this upstream version (7.0, …).
+global_integration_n() {
+  local ver=$1
+  local max=-1 t n
+  while IFS= read -r t; do
+    [[ -z $t ]] && continue
+    n=${t##*.}
+    [[ $n =~ ^[0-9]+$ ]] || continue
+    if (( n > max )); then
+      max=$n
+    fi
+  done < <(git tag -l "v${ver}-*-rafaelgaspar."*)
+  printf '%s\n' "$max"
 }
 
 if [[ -n $explicit_base ]]; then
@@ -54,29 +73,30 @@ fi
 deb_upstream=$(package_upstream_version "${base_tag}")
 
 head_sha=$(git rev-parse HEAD)
+max_n=$(global_integration_n "$deb_upstream")
+tag=""
+skip_release=false
 
-build=0
-prefix="${base_tag}-rafaelgaspar.${build}"
-while git rev-parse "${prefix}" >/dev/null 2>&1; do
-  existing=$(git rev-parse "${prefix}^{commit}")
-  if [[ "${existing}" == "${head_sha}" ]]; then
-    {
-      echo "tag=${prefix}"
-      echo "integration_version=${prefix#v}"
-      echo "base_tag=${base_tag}"
-      echo "package_upstream_version=${deb_upstream}"
-      echo "skip_release=true"
-    } >>"$output"
-    exit 0
-  fi
-  build=$((build + 1))
-  prefix="${base_tag}-rafaelgaspar.${build}"
-done
+if (( max_n >= 0 )); then
+  while IFS= read -r t; do
+    [[ -z $t ]] && continue
+    if [[ $(git rev-parse "${t}^{commit}") == "$head_sha" ]]; then
+      tag=$t
+      skip_release=true
+      break
+    fi
+  done < <(git tag -l "v${deb_upstream}-*-rafaelgaspar.${max_n}")
+fi
+
+if [[ $skip_release != true ]]; then
+  tag="${base_tag}-rafaelgaspar.$((max_n + 1))"
+  skip_release=false
+fi
 
 {
-  echo "tag=${prefix}"
-  echo "integration_version=${prefix#v}"
+  echo "tag=${tag}"
+  echo "integration_version=${tag#v}"
   echo "base_tag=${base_tag}"
   echo "package_upstream_version=${deb_upstream}"
-  echo "skip_release=false"
+  echo "skip_release=${skip_release}"
 } >>"$output"

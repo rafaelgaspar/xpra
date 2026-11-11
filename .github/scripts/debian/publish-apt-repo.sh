@@ -4,6 +4,9 @@
 #
 # Usage: publish-apt-repo.sh <apt-repo-dir> <debs-dir>
 #
+# Each run replaces the suite snapshot. Git-hash Debian versions are not
+# monotonic, so includedeb would skip a "older" hash and leave stale packages.
+#
 # Environment:
 #   RAFAELGASPAR_DEBIAN_SUITE   (default: forky)
 #   APT_ORIGIN                  (default: rafaelgaspar)
@@ -39,7 +42,20 @@ SKIP_PATTERN="${APT_DEB_SKIP_PATTERN:-xpra-build-deps_}"
 DESCRIPTION="${APT_DESCRIPTION:-${LABEL} for Debian ${SUITE}}"
 
 [[ -d "$DEB_DIR" ]] || { echo "missing debs dir: $DEB_DIR" >&2; exit 1; }
+mkdir -p "$REPO_DIR"
+
+# Snapshot replace: drop the previous reprepro tree and leftover public-key
+# filenames (xpra used to write rafaelgaspar-apt.gpg.asc and keep
+# rafaelgaspar-xpra.gpg.asc).
+shopt -s nullglob
+for leftover in "$REPO_DIR"/*.gpg.asc; do
+  [[ $(basename "$leftover") == "$GPG_ASC" ]] && continue
+  rm -f "$leftover"
+done
+rm -rf "$REPO_DIR/db" "$REPO_DIR/dists" "$REPO_DIR/pool" "$REPO_DIR/lists" \
+  "$REPO_DIR/incoming" "$REPO_DIR/tmp" "$REPO_DIR/conf"
 mkdir -p "$REPO_DIR/conf"
+echo "replaced apt snapshot under ${REPO_DIR} (${SUITE})"
 
 SIGN_BLOCK=""
 if [[ "${APT_REPO_SIGNING:-}" == 1 && -n "${APT_SIGN_KEY_ID:-}" ]]; then
@@ -62,14 +78,24 @@ verbose
 basedir ${REPO_DIR}
 EOF
 
-shopt -s nullglob
 count=0
+include_log=$(mktemp)
+trap 'rm -f "$include_log"' EXIT
 for deb in "$DEB_DIR"/*.deb; do
   base=$(basename "$deb")
   if [[ -n "$SKIP_PATTERN" ]] && echo "$base" | grep -Eq "$SKIP_PATTERN"; then
     continue
   fi
-  reprepro -b "$REPO_DIR" includedeb "$SUITE" "$deb"
+  if ! reprepro -b "$REPO_DIR" includedeb "$SUITE" "$deb" >"$include_log" 2>&1; then
+    cat "$include_log" >&2
+    echo "reprepro includedeb failed for $base" >&2
+    exit 1
+  fi
+  cat "$include_log"
+  if grep -Fq "Skipping inclusion" "$include_log"; then
+    echo "reprepro skipped $base (Debian version not newer than the copy already in ${SUITE})" >&2
+    exit 1
+  fi
   count=$((count + 1))
 done
 
