@@ -1,6 +1,6 @@
 Archive: forky
 Component: main
 Origin: rafaelgaspar
-Label: rafaelgaspar integration
+Label: rafaelgaspar xpra
 Architecture: amd64
-Description: rafaelgaspar integration for Debian forky
+Description: rafaelgaspar/xpra integration debs for Debian forky

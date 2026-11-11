@@ -1,8 +1,8 @@
 Origin: rafaelgaspar
-Label: rafaelgaspar integration
+Label: rafaelgaspar xpra
 Suite: forky
 Codename: forky
 Architectures: amd64
 Components: main
-Description: rafaelgaspar integration for Debian forky
+Description: rafaelgaspar/xpra integration debs for Debian forky
 SignWith: E968D53BFFAEE827621FCE7CEA9F7888790F3B75
