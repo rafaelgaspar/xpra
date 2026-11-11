@@ -108,13 +108,40 @@ Libs: -L\${libdir} -lnvidia-encode
 Cflags: -I\${includedir}
 EOF
 
+# libnvidia-encode1 ships libnvidia-encode.so.1 (often under nvidia/current)
+# without the unversioned .so that `-lnvidia-encode` needs.
 encode_lib="/usr/lib/${multiarch}/libnvidia-encode.so"
-if [[ ! -e ${encode_lib}.1 && ! -e $encode_lib ]]; then
-  echo 'int NvEncodeAPICreateInstance(void) { return 0; }' \
-    | "${SUDO[@]}" gcc -shared -fPIC -Wl,-soname,libnvidia-encode.so.1 \
-      -o "${encode_lib}.1" -x c -
-  "${SUDO[@]}" ln -sfn libnvidia-encode.so.1 "$encode_lib"
+if [[ ! -e $encode_lib ]]; then
+  src=""
+  for cand in \
+    "${encode_lib}.1" \
+    "/usr/lib/${multiarch}/nvidia/current/libnvidia-encode.so.1"; do
+    if [[ -e $cand ]]; then
+      src=$cand
+      break
+    fi
+  done
+  if [[ -z $src ]]; then
+    shopt -s nullglob
+    for cand in /usr/lib/${multiarch}/nvidia/current/libnvidia-encode.so.*; do
+      src=$cand
+      break
+    done
+    shopt -u nullglob
+  fi
+  if [[ -n $src ]]; then
+    "${SUDO[@]}" ln -sfn "$src" "$encode_lib"
+  else
+    echo 'int NvEncodeAPICreateInstance(void) { return 0; }' \
+      | "${SUDO[@]}" gcc -shared -fPIC -Wl,-soname,libnvidia-encode.so.1 \
+        -o "${encode_lib}.1" -x c -
+    "${SUDO[@]}" ln -sfn libnvidia-encode.so.1 "$encode_lib"
+  fi
 fi
+[[ -e $encode_lib ]] || {
+  echo "libnvidia-encode.so missing after NVIDIA install" >&2
+  exit 1
+}
 pkg-config --exists nvenc || {
   echo "pkg-config nvenc is missing after install" >&2
   exit 1
