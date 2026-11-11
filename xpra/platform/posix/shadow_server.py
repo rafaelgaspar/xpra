@@ -15,7 +15,7 @@ from xpra.scripts.config import InitExit
 
 ShadowServerFactory = Callable[[dict[str, str]], object]
 
-XSHM: bool = envbool("XPRA_SHADOW_XSHM", True)
+XSHM: bool = envbool("XPRA_XSHM", True)
 NVFBC: bool = envbool("XPRA_SHADOW_NVFBC", True)
 PIPEWIRE: bool = envbool("XPRA_SHADOW_PIPEWIRE", True)
 
