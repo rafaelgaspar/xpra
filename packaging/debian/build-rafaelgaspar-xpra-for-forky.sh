@@ -50,10 +50,28 @@ EOF
 export DEB_BUILD_OPTIONS="${DEB_BUILD_OPTIONS:-} noddebs"
 export PIP_BREAK_SYSTEM_PACKAGES=1
 
+# Rolling forky currently ships no nvidia-cuda-toolkit (main/contrib/non-free).
+# Pin the same snapshot stack k3s-home uses so nvcc and CUDA kernels build.
+DEBIAN_APT_SNAPSHOT="${DEBIAN_APT_SNAPSHOT:-20250928T220000Z}"
 if [[ -f /etc/apt/sources.list.d/debian.sources ]]; then
   "${SUDO[@]}" sed -i 's/Components: main/Components: main contrib non-free non-free-firmware/' \
     /etc/apt/sources.list.d/debian.sources || true
 fi
+"${SUDO[@]}" tee /etc/apt/apt.conf.d/99debian-snapshot >/dev/null <<'EOF'
+Acquire::Check-Valid-Until "false";
+EOF
+"${SUDO[@]}" tee /etc/apt/sources.list.d/debian-cuda-snapshot.sources >/dev/null <<EOF
+Types: deb
+URIs: https://snapshot.debian.org/archive/debian/${DEBIAN_APT_SNAPSHOT}
+Suites: forky
+Components: main contrib non-free non-free-firmware
+Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+EOF
+"${SUDO[@]}" tee /etc/apt/preferences.d/debian-cuda-snapshot >/dev/null <<'EOF'
+Package: glx-alternative-mesa glx-alternative-nvidia glx-diversions libaccinj64-12.4 libcu++-dev libcub-dev libcublas12 libcublaslt12 libcuda1 libcudart12 libcufft11 libcufftw11 libcuinj64-12.4 libcupti-dev libcupti12 libcurand10 libcusolver11 libcusolvermg11 libcusparse12 libnppc12 libnppial12 libnppicc12 libnppidei12 libnppif12 libnppig12 libnppim12 libnppist12 libnppisu12 libnppitc12 libnpps12 libnvblas12 libnvfatbin12 libnvidia-ml-dev libnvidia-ml1 libnvidia-pkcs11-openssl3 libnvidia-ptxjitcompiler1 libnvjitlink12 libnvjpeg12 libnvrtc-builtins12.4 libnvrtc12 libnvtoolsext1 libnvvm4 libthrust-dev nvidia-alternative nvidia-cuda-dev nvidia-cuda-toolkit nvidia-installer-cleanup nvidia-legacy-check nvidia-opencl-dev nvidia-profiler nvidia-support update-glx
+Pin: origin snapshot.debian.org
+Pin-Priority: 1001
+EOF
 "${SUDO[@]}" apt-get update
 "${SUDO[@]}" env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
   pkgconf curl ca-certificates gcc \
