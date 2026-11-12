@@ -5,35 +5,35 @@ Origin: rafaelgaspar
 Label: rafaelgaspar xpra
 Suite: forky
 Codename: forky
-Date: Wed, 11 Nov 2026 16:19:59 UTC
+Date: Thu, 12 Nov 2026 12:51:25 UTC
 Architectures: amd64
 Components: main
 Description: rafaelgaspar/xpra integration debs for Debian forky
 MD5Sum:
- 20e291016bd5f690dfb518c69cebb94a 17462 main/binary-amd64/Packages
- 911b146742abdaf74d21e15d71778b73 4375 main/binary-amd64/Packages.gz
+ 22a3891d4283a2caa4237ea5668f8350 17543 main/binary-amd64/Packages
+ 573848d3ee2cb311f440781939d3fcee 4376 main/binary-amd64/Packages.gz
  896c30864ee2815f607f637ea9b93794 162 main/binary-amd64/Release
 SHA1:
- eb9c58e76aaa77aaeb981878c419b474bc48c9bc 17462 main/binary-amd64/Packages
- 834efb211a19a52c110f36b6460899ce933545ae 4375 main/binary-amd64/Packages.gz
+ 1a879a611f6cb1bb80350a620273463305097a05 17543 main/binary-amd64/Packages
+ bc90d323187f4817044b924c87ab32e2e1c33be2 4376 main/binary-amd64/Packages.gz
  0a890321b81719345171bb5712864875f8761ee2 162 main/binary-amd64/Release
 SHA256:
- 51c6117e0152766ec308112ddbad5bd62a14cce906bc20b17bbb26a28ba7249e 17462 main/binary-amd64/Packages
- d9901331ee612b3f1b800815a6d83dd179eca89c462d1fd4a7a29b8791784c45 4375 main/binary-amd64/Packages.gz
+ b78696d4ddd78c80cf04dc9db6954618e4a8150f78f0da2f8d1532f1605abbe8 17543 main/binary-amd64/Packages
+ 522f3fbeaf8ffc8ecce37351c6cd0d8b30c37f6f523e812e7b3e8e8d57de7b42 4376 main/binary-amd64/Packages.gz
  6c9d3fe28db5d2ccf19e80d97ec73f4eb9a1083684aff46c7d2a5281f29088d5 162 main/binary-amd64/Release
 -----BEGIN PGP SIGNATURE-----
 
-iQIzBAEBCgAdFiEEpIVMfWt8PyvwAoPQTKK4ahJ/e4IFAmr0la8ACgkQTKK4ahJ/
-e4I/XA/7BZsUrRBN51Hl2N3uFL9gOs4m/4jZ7legAAUwYcgTaKrOVEd2aAzZBEFs
-cF9DGzE4/kKc0yxRV3DD7woymkNhj6gSKuHLIR9Q0/e2H5TtA7dU8vaznzH3P1lQ
-8/C85C9wGxW43l/UvYe0g+hb+xI1+r6MVi6XDC6o9JeKZc0QaJWftNoTf4IQ8fVN
-mTLdTp8qfdD8mFiL+hiERjNTVrEu/CbjUk4eogi0pgzigt1723QIEhcqB1hahSpI
-Hb9chmimGATKsetovZzUID6t/zABme3ZsEn48EnsJPOJDXyxtErEGm3JlCI4+V3f
-zFjGZ66fhwlO4y20coOs7NbtopP5ZRpqBQKvdBlwk+NbhuXTT+WpEmQudqbXl33l
-tqgK5Ep2Ogt4zGrjGGuZvmDxuZ3Djjyf9YYcch49XHe+nDEl3Vr6ZZIQra4aNHBh
-ZdVzxqghFfqVUxLc8gEC6Z9ACV3GE2p6ogUzl0mDPYugyMh8i2NhyrerhJi8Monq
-tZvNVFOMpNzGNkdfk7xkb5MhiPtUqb95BsK0fisgYgb0bWlgcBu2RNnXdEtb3tSx
-bbCMda6yRT/pzU/hDmOBAuBzWxhXUBPBsExZkTNW8aYySVPi4JP4ug3MYPpmqA5S
-vFIL6ejklFuSnMLtM0BDIvHqPoBLJQ9NPXR8NwwRHToI4Xj/DQg=
-=MwH/
+iQIzBAEBCgAdFiEEpIVMfWt8PyvwAoPQTKK4ahJ/e4IFAmr1tk0ACgkQTKK4ahJ/
+e4Jzbg//QN5l9pNHjyehfEgH6Fg2SGjGe1f/BKZaIYjTPj3VsuyGrAxhEOSCI8FJ
+yHJpULPv813gIyYEqdpYOMZF8o5PIad/mfamAumSUBcAEXIYw11tIPOLKWvLfSEG
+L3ipv7ymMAc2ga4TqdH5mkFbtBgN9a78hNxLLPNaIwRl8ays/w+nSqjpM8Fd9ygm
+Q3eS6+6n2JG7ye8OIxIpKg1yeHlnaVw7hYmxoMANYlsQ1G8/0Kykai2zsTzAGnu7
+BN6qPn+HzDL39KI7uVkpVAtSi32rl8k+b0+1oh2h3ZBNwT98VTezazSCL9l8bh+F
+RdzMgyT3ILoJHRI0UYF5YD9Sf7ErSmOzVM9m0sFZiiQIACugl+PQkMk/L09gqBVv
+zstOAcFZ9kBxOguE4s0E+xyU7A445StYRJK8ymi1hmWvxFi8P1tvkBC/gUdEF5FK
+rOn34nKtj4kKLFvqMtd60RrZfbJRhXkawk7jGnjAQQF2GvK80BX4Ca2Z323UtEdG
+Zvgbg4pkqfnONnNGT+ktN+3dDYKQgnezBMqENXVW0gKrPKTzzueMoajOM33javsp
+o7opIEq/4bframw3gIuLpXiSItS0EnN0+VjTq8A9ppsnEuXLjv4ouYWKcO1CTbHu
+lbqJNKTC+BygP3qp9IYWVmLwbmZ4QPwoEtLVRrFMm/NNydK0l/k=
+=vw/P
 -----END PGP SIGNATURE-----
