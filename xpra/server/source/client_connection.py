@@ -30,7 +30,11 @@ YIELD = envbool("XPRA_YIELD", False)
 counter = AtomicInteger()
 
 ENCODE_WORK_ITEM_TUPLE = tuple[Callable, Sequence[Any]]
-ENCODE_WORK_ITEM: TypeAlias = ENCODE_WORK_ITEM_TUPLE | None
+# stop_encode_thread queues (run_even_if_closed, fn, args). The flag is False
+# for the deferred cleanups, which must run so the encode thread releases the
+# resources it still holds.
+ENCODE_WORK_ITEM_AT_END = tuple[bool, Callable, Sequence[Any]]
+ENCODE_WORK_ITEM: TypeAlias = ENCODE_WORK_ITEM_TUPLE | ENCODE_WORK_ITEM_AT_END | None
 
 
 class ClientConnection(StubClientConnection):
@@ -211,7 +215,12 @@ class ClientConnection(StubClientConnection):
             item = self.encode_work_queue.get(True)
             if item is None:
                 return  # empty marker
-            fn, args = item
+            if len(item) == 3:
+                optional, fn, args = item
+                if optional and self.is_closed():
+                    continue
+            else:
+                fn, args = item
             try:
                 fn(*args)
             except Exception as e:

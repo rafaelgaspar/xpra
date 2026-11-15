@@ -520,7 +520,12 @@ cdef class Encoder:
                     log("using preset '%s' for speed=%s, quality=%s, lossless=%s, pixel_format=%s", preset, self.speed, self.quality, self.lossless, self.pixel_format)
                     return parseguid(preset_guid)
         no_preset[self.encoding] = monotonic()
-        raise ValueError("no matching presets available for '%s' with speed=%i and quality=%i" % (self.codec_name, self.speed, self.quality))
+        have = csv(presets.keys()) or "none"
+        rejected = csv(bad_presets.get((device_id, self.codec_name), ())) or "none"
+        raise ValueError(
+            "no matching presets available for '%s' with speed=%i and quality=%i (have: %s, rejected: %s)"
+            % (self.codec_name, self.speed, self.quality, have, rejected)
+        )
 
     def init_context(self, encoding: str, unsigned int width, unsigned int height, src_format: str, options: typedict) -> None:
         log("init_context%s", (encoding, width, height, src_format, options))
