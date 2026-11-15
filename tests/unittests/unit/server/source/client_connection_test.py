@@ -33,6 +33,22 @@ class ClientConnectionEncodeTeardownTest(unittest.TestCase):
             fn(*args)
         self.assertEqual(seen, ["mmap", "cuda"])
 
+    def test_encode_loop_runs_at_end_tuple(self):
+        from threading import Thread
+
+        from xpra.server.source.client_connection import ClientConnection
+
+        cc = ClientConnection(None, lambda: None, lambda *_a: None)
+        seen = []
+        cc.encode_work_queue.put((lambda tag: seen.append(tag), ("damage",)))
+        cc.encode_work_queue.put((False, lambda tag: seen.append(tag), ("mmap",)))
+        cc.encode_work_queue.put(None)
+        thread = Thread(target=cc.encode_loop)
+        thread.start()
+        thread.join(2)
+        self.assertFalse(thread.is_alive())
+        self.assertEqual(seen, ["damage", "mmap"])
+
 
 if __name__ == "__main__":
     unittest.main()
