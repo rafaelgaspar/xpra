@@ -4,6 +4,7 @@
 # Xpra is released under the terms of the GNU GPL v2, or, at your option, any
 # later version. See the file COPYING for details.
 
+import os
 from typing import Any, Final
 from collections.abc import Sequence
 
@@ -72,7 +73,19 @@ WINDOW_TYPE_ATOMS = tuple(f"_NET_WM_WINDOW_TYPE{wtype}" for wtype in (
 
 
 rxid = get_root_xid()
-screen = X11CoreBindings().get_default_screen()
+
+
+def _wm_selection_screen() -> int:
+    # ICCCM WM_S<N> is the X screen, not a virtual desktop.
+    # DESKTOP_SCREEN wins when set (multi-server pods that share one X display);
+    # otherwise use the default X screen (v7.x upstream).
+    raw = os.environ.get("DESKTOP_SCREEN", "").strip()
+    if raw:
+        return int(raw)
+    return X11CoreBindings().get_default_screen()
+
+
+screen = _wm_selection_screen()
 WM_S = f"WM_S{screen}"
 _NET_WM_CM_S = f"_NET_WM_CM_S{screen}"
 
