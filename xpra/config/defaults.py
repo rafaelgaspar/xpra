@@ -452,6 +452,7 @@ def build_defaults(context: DefaultsContext) -> dict[str, Any]:
         "start"             : [],
         "start-late"        : [],
         "start-child"       : [],
+        "adopt-children"    : [],
         "start-child-late"  : [],
         "start-after-connect"       : [],
         "start-child-after-connect" : [],
