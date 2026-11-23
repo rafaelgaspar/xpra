@@ -1696,7 +1696,14 @@ class WindowVideoSource(WindowSource):
                 if self.is_cancelled():
                     videolog(f"ignoring {e} in cancelled state")
                     return False
-                videolog.warn("Warning: failed to setup video pipeline %s", option, exc_info=True)
+                # The same NVENC rejection is retried on every damage frame
+                # (a denylisted preset, then "no matching presets"). Log it once.
+                spec = option[-1] if option else None
+                codec = getattr(spec, "codec_type", spec)
+                if first_time(f"video-pipeline-{codec}-{type(e).__name__}-{self.wid:#x}"):
+                    videolog.warn("Warning: failed to setup video pipeline %s", option, exc_info=True)
+                else:
+                    videolog("failed to setup video pipeline %s: %s", option, e)
             # we're here because an exception occurred, cleanup before trying again:
             self.csc_clean(self._csc_encoder)
             self.ve_clean(self._video_encoder)
