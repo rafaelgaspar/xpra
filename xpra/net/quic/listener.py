@@ -19,6 +19,7 @@ from aioquic.quic.events import ProtocolNegotiated, QuicEvent
 
 from xpra.net.http.common import check_origin
 from xpra.net.quic.common import MAX_DATAGRAM_FRAME_SIZE
+from xpra.net.quic.h3conn import XpraH3Connection
 from xpra.net.quic.congestion import CONGESTION_CONTROL_ALGORITHM
 from xpra.net.quic.protocol import XpraQuicConnectionProtocol
 from xpra.net.quic.http import HttpRequestHandler
@@ -60,7 +61,7 @@ class HttpServerProtocol(XpraQuicConnectionProtocol):
         if isinstance(event, ProtocolNegotiated) and event.alpn_protocol in H3_ALPN:
             # WebTransport needs datagrams, which QUIC only accepts with a `MAX_DATAGRAM_FRAME_SIZE`:
             enable_webtransport = bool(self.quic_connection.configuration.max_datagram_frame_size)
-            self._http = H3Connection(self.quic_connection, enable_webtransport=enable_webtransport)
+            self._http = XpraH3Connection(self.quic_connection, enable_webtransport=enable_webtransport)
         #  pass event to the HTTP layer
         log(f"hsp:quic_event_received(..) http={self._http}")
         if self._http is not None:

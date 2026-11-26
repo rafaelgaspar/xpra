@@ -36,6 +36,7 @@ from xpra.net.tls.parsing import parse_ssl_verify_mode
 from xpra.net.aio.thread import get_threaded_loop
 from xpra.net.quic.connection import XpraQuicConnection
 from xpra.net.quic.common import USER_AGENT, MAX_DATAGRAM_FRAME_SIZE, binary_headers
+from xpra.net.quic.h3conn import XpraH3Connection
 from xpra.net.quic.congestion import CONGESTION_CONTROL_ALGORITHM
 from xpra.net.quic.protocol import XpraQuicConnectionProtocol
 from xpra.util.str_fn import csv, Ellipsizer
@@ -153,7 +154,7 @@ class WebTransportClient(XpraQuicConnectionProtocol):
         super().__init__(*args, **kwargs)
         # WebTransport needs datagrams, which QUIC only accepts with a `MAX_DATAGRAM_FRAME_SIZE`:
         enable_webtransport = bool(self.quic_connection.configuration.max_datagram_frame_size)
-        self._http: H3Connection = H3Connection(self.quic_connection, enable_webtransport=enable_webtransport)
+        self._http: H3Connection = XpraH3Connection(self.quic_connection, enable_webtransport=enable_webtransport)
         self._sessions: dict[int, ClientWebTransportConnection] = {}
 
     def open(self, host: str, port: int, path: str) -> ClientWebTransportConnection:
@@ -191,7 +192,9 @@ class WebSocketClient(XpraQuicConnectionProtocol):
         self._websockets: dict[int, ClientWebSocketConnection] = {}
         quic = self.quic_connection
         # datagrams are only enabled when QUIC accepts them (see `MAX_DATAGRAM_FRAME_SIZE`):
-        self._http: H3Connection = H3Connection(quic, enable_datagrams=bool(quic.configuration.max_datagram_frame_size))
+        self._http: H3Connection = XpraH3Connection(
+            quic, enable_datagrams=bool(quic.configuration.max_datagram_frame_size)
+        )
 
     def open(self, host: str, port: int, path: str) -> ClientWebSocketConnection:
         log(f"open({host}, {port}, {path})")
