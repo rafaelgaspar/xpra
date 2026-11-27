@@ -3,7 +3,8 @@
 # Xpra is released under the terms of the GNU GPL v2, or, at your option, any
 # later version. See the file COPYING for details.
 
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
+from threading import Condition
 from time import monotonic
 from typing import Any, NamedTuple
 
@@ -34,19 +35,22 @@ class CongestionSample(NamedTuple):
 
 
 def get_pending_stream_info(quic: QuicConnection) -> dict[str, int]:
-    """Count queued stream bytes on the asyncio thread, excluding data in flight.
+    """Count queued stream bytes on the asyncio thread.
 
-    aioquic merges new data and retransmissions into the same pending ranges.
-    Split each range at the highest offset previously emitted into STREAM frames.
-    These are current stream-byte counts, not cumulative QUIC packet counters.
+    `pending-new-bytes` / `pending-retransmit-bytes` are unsent ranges, split at
+    the highest offset already emitted into STREAM frames. Packetizing those
+    ranges does not free RSS: aioquic's StreamSender keeps the bytes in
+    `_buffer` until they are ACK'd. `buffered-bytes` is that unacked payload,
+    which is what the WebTransport send cap must wait on.
     """
-    new_bytes = retransmit_bytes = 0
+    new_bytes = retransmit_bytes = buffered_bytes = 0
     if not quic.is_closing():
         for stream in quic._streams.values():
             sender = stream.sender
             # Reset senders retain their buffers but will never send them again.
             if sender.is_finished or sender._reset_error_code is not None:
                 continue
+            buffered_bytes += len(sender._buffer)
             boundary = sender.highest_offset
             for r in sender._pending:
                 retransmit_bytes += max(0, min(r.stop, boundary) - r.start)
@@ -55,6 +59,7 @@ def get_pending_stream_info(quic: QuicConnection) -> dict[str, int]:
         "pending-new-bytes": new_bytes,
         "pending-retransmit-bytes": retransmit_bytes,
         "pending-bytes": new_bytes + retransmit_bytes,
+        "buffered-bytes": buffered_bytes,
     }
 
 
@@ -112,6 +117,8 @@ class XpraRenoCongestionControl(RenoCongestionControl):
         super().__init__(max_datagram_size=max_datagram_size)
         self._last_log_time = 0.0
         self._last_pending_log_time = 0.0
+        # Encode threads wait here so aioquic's stream sender cannot grow without bound.
+        self._pending_space = Condition()
         self._samples: tuple[CongestionSample, ...] = ()
         self._sample_start: float | None = None
         self._last_loss: float | None = None
@@ -128,6 +135,7 @@ class XpraRenoCongestionControl(RenoCongestionControl):
             "pending-new-bytes": 0,
             "pending-retransmit-bytes": 0,
             "pending-bytes": 0,
+            "buffered-bytes": 0,
             "loss-events": 0,
             "persistent-congestion-events": 0,
             "rtt-samples": 0,
@@ -146,11 +154,27 @@ class XpraRenoCongestionControl(RenoCongestionControl):
             info["last-loss-age-ms"] = max(0, int((now - last_loss) * 1000))
         return info
 
+    def notify_send_waiters(self) -> None:
+        with self._pending_space:
+            self._pending_space.notify_all()
+
+    def wait_until_queued_below(self, limit: int, *, closed: Callable[[], bool]) -> bool:
+        """Block until buffered-bytes is at most `limit`, or `closed` is true.
+
+        Returns False if the connection closed while waiting. The 50ms wait
+        timeout only re-checks `closed`; it is not a send deadline.
+        """
+        with self._pending_space:
+            while not closed() and self._statistics.get("buffered-bytes", 0) > limit:
+                self._pending_space.wait(timeout=0.05)
+            return not closed()
+
     def update_pending_streams(self, quic: QuicConnection) -> None:
         # Called after transmit(), including ACK and recovery timer processing.
         # Readers on other threads only see the published snapshot.
         pending = get_pending_stream_info(quic)
         self._update_statistics(pending)
+        self.notify_send_waiters()
         if log.is_debug_enabled():
             now = monotonic()
             if now - self._last_pending_log_time >= 1:

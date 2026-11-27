@@ -75,6 +75,9 @@ Environment variables:
 add `window-draw-fragment` to send video frames as datagrams
 * `XPRA_DATAGRAM_ACCEPT_PACKET_TYPES`: the packet types we accept as datagrams (default: `audio-data,window-draw-fragment`)
 * `XPRA_QUIC_DATAGRAM_DROP_PCT`: discard this percentage of the outgoing datagrams, to test loss tolerance (default: `0`)
+* `XPRA_QUIC_MAX_PENDING_STREAM_BYTES`: cap on unacked aioquic `StreamSender._buffer` bytes (default: `4194304`).
+`stream_write` blocks the encode thread once this is exceeded, so a slow WebTransport
+client cannot grow RSS without bound. `0` disables the cap
 * `XPRA_VIDEO_DATAGRAM_SIZE`: the maximum size of the video slices and fragments,
 `-1` to use the largest that fits in a datagram (default), `0` to disable video datagrams
 * `XPRA_DRAW_FRAGMENT_OVERHEAD`: the space reserved for the `window-draw-fragment` packet headers (default: `192` bytes)

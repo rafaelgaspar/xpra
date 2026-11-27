@@ -20,6 +20,7 @@ import random
 import datetime
 import unittest
 from queue import SimpleQueue, Empty
+from threading import Event, Thread
 from unittest.mock import patch
 
 try:
@@ -261,12 +262,24 @@ class QuicDatagramTest(unittest.TestCase):
         pair, sender = self.make_pair()
         pending = []
         self.loop.call = pending.append
+        finished = Event()
         with patch.object(sender, "get_max_datagram_size", wraps=sender.get_max_datagram_size) as get_max:
-            sender.stream_write(b"hello", DATAGRAM_TYPE)
+            def writer() -> None:
+                sender.stream_write(b"hello", DATAGRAM_TYPE)
+                finished.set()
+
+            thread = Thread(target=writer)
+            thread.start()
+            for _ in range(50):
+                if pending:
+                    break
+                thread.join(0.02)
             get_max.assert_not_called()
             assert len(pending) == 1
             pending.pop()()
+            assert finished.wait(1)
             get_max.assert_called_once()
+        thread.join(1)
         assert pair.receiver.datagram_records == [b"hello"]
 
     def test_interleaved_bursts(self):
@@ -402,6 +415,98 @@ class QuicDatagramTest(unittest.TestCase):
         assert sender.get_info()["quic"]["datagrams-discarded"] == sender.datagrams_discarded
         # whatever does arrive is intact and in order:
         assert datagrams == [buf for buf in sent if buf in datagrams]
+
+    def test_stream_write_waits_for_loop(self):
+        # Returning before aioquic has accepted the buffer lets the encode thread
+        # keep a second copy of every draw packet in the asyncio call queue.
+        class HoldLoop:
+            def __init__(self):
+                self.pending = []
+                self.calls = 0
+
+            def call(self, f) -> None:
+                self.calls += 1
+                self.pending.append(f)
+
+            def flush(self) -> None:
+                fns, self.pending = self.pending, []
+                for fn in fns:
+                    fn()
+
+        loop = HoldLoop()
+        patcher = patch("xpra.net.quic.connection.get_threaded_loop", return_value=loop)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        pair, sender = self.make_pair()
+        finished = Event()
+        sent = []
+
+        def writer() -> None:
+            sent.append(sender.stream_write(b"abc", STREAM_TYPE))
+            finished.set()
+
+        thread = Thread(target=writer)
+        thread.start()
+        assert not finished.wait(0.2), "stream_write returned before the loop ran"
+        assert loop.calls == 1
+        loop.flush()
+        assert finished.wait(1)
+        thread.join(1)
+        assert sent == [3]
+        pair.drain_link()
+        stream, datagrams = self.received(pair)
+        assert stream == b"abc"
+        assert not datagrams
+
+    def test_stream_write_waits_for_pending_budget(self):
+        from xpra.net.quic.congestion import XpraRenoCongestionControl
+        pair, sender = self.make_pair()
+        control = XpraRenoCongestionControl(max_datagram_size=1200)
+        control._statistics["buffered-bytes"] = 8 * 1024 * 1024
+        sender.congestion_control = control
+        started = Event()
+        finished = Event()
+
+        def writer() -> None:
+            started.set()
+            sender.stream_write(b"abc", STREAM_TYPE)
+            finished.set()
+
+        thread = Thread(target=writer)
+        thread.start()
+        assert started.wait(1)
+        assert not finished.wait(0.2), "stream_write did not wait for the pending-byte cap"
+        control._statistics["buffered-bytes"] = 0
+        control.notify_send_waiters()
+        assert finished.wait(1)
+        thread.join(1)
+        pair.drain_link()
+        stream, datagrams = self.received(pair)
+        assert stream == b"abc"
+        assert not datagrams
+
+    def test_close_unblocks_pending_budget_wait(self):
+        from xpra.net.quic.congestion import XpraRenoCongestionControl
+        pair, sender = self.make_pair()
+        control = XpraRenoCongestionControl(max_datagram_size=1200)
+        control._statistics["buffered-bytes"] = 8 * 1024 * 1024
+        sender.congestion_control = control
+        started = Event()
+        finished = Event()
+        written = []
+
+        def writer() -> None:
+            started.set()
+            written.append(sender.stream_write(b"abc", STREAM_TYPE))
+            finished.set()
+
+        thread = Thread(target=writer)
+        thread.start()
+        assert started.wait(1)
+        sender.close()
+        assert finished.wait(1)
+        thread.join(1)
+        assert written == [0]
 
 
 @unittest.skipUnless(HAVE_AIOQUIC, "aioquic not available")

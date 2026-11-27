@@ -139,31 +139,32 @@ class QuicCongestionTest(unittest.TestCase):
         quic._streams[0] = stream
         sender = stream.sender
 
-        def check(new_bytes, retransmit_bytes):
+        def check(new_bytes, retransmit_bytes, buffered_bytes):
             self.assertEqual(get_pending_stream_info(quic), {
                 "pending-new-bytes": new_bytes,
                 "pending-retransmit-bytes": retransmit_bytes,
                 "pending-bytes": new_bytes + retransmit_bytes,
+                "buffered-bytes": buffered_bytes,
             })
 
-        check(0, 0)
+        check(0, 0, 0)
         sender.write(bytes(1000))
-        check(1000, 0)
+        check(1000, 0, 1000)
         sender.get_frame(400)
-        check(600, 0)  # Bytes already in flight are excluded.
+        check(600, 0, 1000)  # Packetizing excludes in-flight from pending-new, not from _buffer.
         sender.on_data_delivery(QuicDeliveryState.LOST, 0, 400, False)
-        check(600, 400)  # aioquic merges these into one range crossing highest_offset.
+        check(600, 400, 1000)  # aioquic merges these into one range crossing highest_offset.
         sender.get_frame(250)
-        check(600, 150)
+        check(600, 150, 1000)
         sender.get_frame(300)  # Retransmission and first transmission in the same frame.
-        check(450, 0)
+        check(450, 0, 1000)
         sender.on_data_delivery(QuicDeliveryState.LOST, 250, 550, False)
         sender.on_data_delivery(QuicDeliveryState.LOST, 250, 550, False)
-        check(450, 300)  # Repeated loss notifications do not count a byte twice.
+        check(450, 300, 1000)  # Repeated loss notifications do not count a byte twice.
         sender.get_frame(750)
-        check(0, 0)
+        check(0, 0, 1000)
         sender.on_data_delivery(QuicDeliveryState.ACKED, 0, 1000, False)
-        check(0, 0)
+        check(0, 0, 0)
 
     def test_pending_stream_scope(self):
         from aioquic.quic.connection import QuicConnectionState
@@ -182,7 +183,10 @@ class QuicCongestionTest(unittest.TestCase):
         # Unreliable datagrams are not stream backlog.
         # Queued like `send_datagram_frame()` does, which needs a completed handshake since aioquic 1.9:
         quic._datagrams_pending.append(bytes(300))
-        expected = {"pending-new-bytes": 1400, "pending-retransmit-bytes": 100, "pending-bytes": 1500}
+        expected = {
+            "pending-new-bytes": 1400, "pending-retransmit-bytes": 100, "pending-bytes": 1500,
+            "buffered-bytes": 1500,
+        }
         self.assertEqual(get_pending_stream_info(quic), expected)
         quic.close()
         self.assertEqual(get_pending_stream_info(quic)["pending-bytes"], 0)
@@ -208,6 +212,7 @@ class QuicCongestionTest(unittest.TestCase):
         stream.sender.get_frame(400)
         # get_info() must not inspect live asyncio state, even after it changes.
         self.assertEqual(shared.get_info()["quic"]["congestion"]["pending-new-bytes"], 1000)
+        self.assertEqual(shared.get_info()["quic"]["congestion"]["buffered-bytes"], 1000)
         self.assertEqual(before["pending-bytes"], 0)
         info = shared.get_info()["quic"]["congestion"]
         info["pending-bytes"] = -1
@@ -215,6 +220,41 @@ class QuicCongestionTest(unittest.TestCase):
         self.assertEqual(other.get_info()["quic"]["congestion"]["pending-bytes"], 0)
         first.congestion_control.update_pending_streams(quic)
         self.assertEqual(shared.get_info()["quic"]["congestion"]["pending-bytes"], 600)
+        self.assertEqual(shared.get_info()["quic"]["congestion"]["buffered-bytes"], 1000)
+
+    def test_wait_until_queued_below(self):
+        from threading import Event, Thread
+        from xpra.net.quic.congestion import XpraRenoCongestionControl
+        control = XpraRenoCongestionControl(max_datagram_size=1200)
+        control._statistics["buffered-bytes"] = 4096
+        closed = False
+        finished = Event()
+
+        def waiter() -> None:
+            assert control.wait_until_queued_below(1024, closed=lambda: closed)
+            finished.set()
+
+        thread = Thread(target=waiter)
+        thread.start()
+        self.assertFalse(finished.wait(0.15))
+        control._statistics["buffered-bytes"] = 512
+        control.notify_send_waiters()
+        self.assertTrue(finished.wait(1))
+        thread.join(1)
+
+        control._statistics["buffered-bytes"] = 4096
+        finished.clear()
+
+        def closed_waiter() -> None:
+            assert not control.wait_until_queued_below(1024, closed=lambda: closed)
+            finished.set()
+
+        thread = Thread(target=closed_waiter)
+        thread.start()
+        closed = True
+        control.notify_send_waiters()
+        self.assertTrue(finished.wait(1))
+        thread.join(1)
 
     def test_protocol_pending_updates(self):
         from aioquic.quic.packet_builder import QuicDeliveryState
@@ -238,6 +278,7 @@ class QuicCongestionTest(unittest.TestCase):
                         quic.send_stream_data(stream_id, bytes(1000))
                         protocol.transmit()
                         self.assertEqual(control.get_info()["pending-new-bytes"], baseline + 1000)
+                        self.assertEqual(control.get_info()["buffered-bytes"], baseline + 1000)
                         # No handshake response yet: stream bytes stay queued.
                         sender = quic._streams[stream_id].sender
                         sender.get_frame(400)
@@ -246,6 +287,7 @@ class QuicCongestionTest(unittest.TestCase):
                         info = control.get_info()
                         self.assertEqual(info["pending-new-bytes"], baseline + 600)
                         self.assertEqual(info["pending-retransmit-bytes"], 400)
+                        self.assertEqual(info["buffered-bytes"], baseline + 1000)
                         quic.close()
                         protocol.transmit()
                         self.assertEqual(control.get_info()["pending-bytes"], 0)
@@ -272,6 +314,7 @@ class QuicCongestionTest(unittest.TestCase):
             self.assertEqual(log.call_count, 1)
             self.assertEqual(log.call_args.args[-1], {
                 "pending-new-bytes": 1000, "pending-retransmit-bytes": 0, "pending-bytes": 1000,
+                "buffered-bytes": 1000,
             })
             stream.sender.get_frame(1000)
             clock.return_value = 10.5
@@ -281,6 +324,7 @@ class QuicCongestionTest(unittest.TestCase):
             control.update_pending_streams(quic)
             self.assertEqual(log.call_count, 2)
             self.assertEqual(log.call_args.args[-1]["pending-bytes"], 0)
+            self.assertEqual(log.call_args.args[-1]["buffered-bytes"], 1000)
 
     def test_recent_rates_and_idle(self):
         from xpra.net.quic.congestion import XpraRenoCongestionControl
