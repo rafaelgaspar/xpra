@@ -6,6 +6,7 @@
 import os
 from random import random
 from queue import SimpleQueue
+from threading import Event
 from typing import Any
 from collections.abc import Callable, Sequence
 
@@ -18,10 +19,10 @@ from xpra.exit_codes import ExitCode
 from xpra.net.aio.thread import get_threaded_loop
 from xpra.net.bytestreams import Connection
 from xpra.net.quic.common import aioquic_version_info, binary_headers, override_aioquic_logger
-from xpra.net.quic.congestion import get_congestion_control
+from xpra.net.quic.congestion import get_congestion_control, get_pending_stream_info
 from xpra.util.str_fn import Ellipsizer, memoryview_to_bytes
 from xpra.util.version import vtrim
-from xpra.util.env import envbool
+from xpra.util.env import envbool, envint
 from xpra.net.packet_type import AUDIO_DATA
 from xpra.log import Logger
 
@@ -35,6 +36,11 @@ DATAGRAM_PACKET_TYPES = tuple(x.strip() for x in os.environ.get(
 
 # for testing loss tolerance: the percentage of outgoing datagrams to discard
 DATAGRAM_DROP_PCT = float(os.environ.get("XPRA_QUIC_DATAGRAM_DROP_PCT", "0"))
+
+# aioquic's StreamSender.write() appends to an unbounded buffer. Returning from
+# stream_write before that buffer has room lets the encode thread treat the data
+# as sent and keep producing, which is the WebTransport RSS leak. 0 disables.
+MAX_PENDING_STREAM_BYTES = envint("XPRA_QUIC_MAX_PENDING_STREAM_BYTES", 4 * 1024 * 1024)
 
 if envbool("XPRA_QUIC_LOGGER", True):
     override_aioquic_logger()
@@ -85,6 +91,7 @@ class XpraQuicConnection(Connection):
             "datagram-packet-types": self.datagram_packet_types,
             "accepted": self.accepted,
             "closed": self.closed,
+            "max-pending-stream-bytes": MAX_PENDING_STREAM_BYTES,
             "aioquic": vtrim(aioquic_version_info),
         }
         config = self.connection.quic_connection.configuration
@@ -124,6 +131,8 @@ class XpraQuicConnection(Connection):
                 self.send_close(code, reason)
             finally:
                 self.closed = True
+        if self.congestion_control:
+            self.congestion_control.notify_send_waiters()
         Connection.close(self)
 
     def send_close(self, code=QuicErrorCode.NO_ERROR, reason="") -> None:
@@ -149,26 +158,75 @@ class XpraQuicConnection(Connection):
         stream_id = self.stream_id
         log("quic.stream_write(%s, %s) using stream id %s", Ellipsizer(buf), packet_type, stream_id)
 
-        def do_write() -> None:
-            # aioquic is not thread safe, this runs in the asyncio loop thread
+        while True:
             if self.closed:
-                log(f"connection is already closed, packet {packet_type} dropped")
-                return
-            try:
-                # decide here, so the datagram capacity cannot change before it is used:
-                if self.use_datagram(data, packet_type):
-                    self.do_write_datagram(data)
-                else:
-                    self.do_write(stream_id, data)
-                self.transmit()
-            except H3Error:
-                if self.closed or self.connection.quic_connection.is_closing():
-                    log(f"connection is already closed, packet {packet_type} dropped")
-                    return
-                raise
+                return 0
+            # Datagram vs stream is decided on the loop thread. Stream packets can
+            # wait here; datagrams skip this so a backed-up stream does not stall audio.
+            if packet_type not in self.datagram_packet_types:
+                self._wait_for_stream_budget(len(data))
+                if self.closed:
+                    return 0
+            sent = 0
+            done = Event()
 
-        get_threaded_loop().call(do_write)
-        return len(buf)
+            def do_write() -> None:
+                # aioquic is not thread safe, this runs in the asyncio loop thread
+                nonlocal sent
+                try:
+                    if self.closed or self.connection.quic_connection.is_closing():
+                        log(f"connection is already closed, packet {packet_type} dropped")
+                        return
+                    try:
+                        # decide here, so the datagram capacity cannot change before it is used:
+                        if self.use_datagram(data, packet_type):
+                            self.do_write_datagram(data)
+                            self.transmit()
+                            sent = len(buf)
+                            return
+                        if not self._stream_budget_available(len(data)):
+                            self._publish_stream_budget()
+                            return
+                        self.do_write(stream_id, data)
+                        self.transmit()
+                        sent = len(buf)
+                    except H3Error:
+                        if self.closed or self.connection.quic_connection.is_closing():
+                            log(f"connection is already closed, packet {packet_type} dropped")
+                            return
+                        raise
+                finally:
+                    done.set()
+
+            get_threaded_loop().call(do_write)
+            done.wait()
+            if sent or self.closed or self.connection.quic_connection.is_closing():
+                return sent
+            self._wait_for_stream_budget(len(data))
+
+    def _stream_budget_available(self, nbytes: int) -> bool:
+        # Called from the asyncio loop thread, so this can read aioquic state.
+        if not self.congestion_control or MAX_PENDING_STREAM_BYTES <= 0:
+            return True
+        pending = get_pending_stream_info(self.connection.quic_connection)["pending-new-bytes"]
+        if nbytes >= MAX_PENDING_STREAM_BYTES:
+            return pending == 0
+        return pending + nbytes <= MAX_PENDING_STREAM_BYTES
+
+    def _publish_stream_budget(self) -> None:
+        if self.congestion_control:
+            self.congestion_control.update_pending_streams(self.connection.quic_connection)
+
+    def _wait_for_stream_budget(self, nbytes: int) -> None:
+        # Do not wait on the asyncio thread: that would prevent transmit() from
+        # draining the stream sender, which is what frees the budget.
+        control = self.congestion_control
+        if not control or MAX_PENDING_STREAM_BYTES <= 0:
+            return
+        # A single write larger than the cap is still sent, but only once the
+        # previous queued payload has been handed to QUIC packets.
+        limit = 0 if nbytes >= MAX_PENDING_STREAM_BYTES else MAX_PENDING_STREAM_BYTES - nbytes
+        control.wait_until_queued_below(limit, closed=lambda: self.closed)
 
     def use_datagram(self, data: bytes, packet_type: str) -> bool:
         """ called from the asyncio loop thread """

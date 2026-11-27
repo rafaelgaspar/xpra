@@ -216,6 +216,40 @@ class QuicCongestionTest(unittest.TestCase):
         first.congestion_control.update_pending_streams(quic)
         self.assertEqual(shared.get_info()["quic"]["congestion"]["pending-bytes"], 600)
 
+    def test_wait_until_queued_below(self):
+        from threading import Event, Thread
+        from xpra.net.quic.congestion import XpraRenoCongestionControl
+        control = XpraRenoCongestionControl(max_datagram_size=1200)
+        control._statistics["pending-new-bytes"] = 4096
+        closed = False
+        finished = Event()
+
+        def waiter() -> None:
+            assert control.wait_until_queued_below(1024, closed=lambda: closed)
+            finished.set()
+
+        thread = Thread(target=waiter)
+        thread.start()
+        self.assertFalse(finished.wait(0.15))
+        control._statistics["pending-new-bytes"] = 512
+        control.notify_send_waiters()
+        self.assertTrue(finished.wait(1))
+        thread.join(1)
+
+        control._statistics["pending-new-bytes"] = 4096
+        finished.clear()
+
+        def closed_waiter() -> None:
+            assert not control.wait_until_queued_below(1024, closed=lambda: closed)
+            finished.set()
+
+        thread = Thread(target=closed_waiter)
+        thread.start()
+        closed = True
+        control.notify_send_waiters()
+        self.assertTrue(finished.wait(1))
+        thread.join(1)
+
     def test_protocol_pending_updates(self):
         from aioquic.quic.packet_builder import QuicDeliveryState
         from xpra.net.quic.client import WebSocketClient, WebTransportClient

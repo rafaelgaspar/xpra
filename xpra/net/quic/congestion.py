@@ -3,7 +3,8 @@
 # Xpra is released under the terms of the GNU GPL v2, or, at your option, any
 # later version. See the file COPYING for details.
 
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
+from threading import Condition
 from time import monotonic
 from typing import Any, NamedTuple
 
@@ -112,6 +113,8 @@ class XpraRenoCongestionControl(RenoCongestionControl):
         super().__init__(max_datagram_size=max_datagram_size)
         self._last_log_time = 0.0
         self._last_pending_log_time = 0.0
+        # Encode threads wait here so aioquic's stream sender cannot grow without bound.
+        self._pending_space = Condition()
         self._samples: tuple[CongestionSample, ...] = ()
         self._sample_start: float | None = None
         self._last_loss: float | None = None
@@ -146,11 +149,27 @@ class XpraRenoCongestionControl(RenoCongestionControl):
             info["last-loss-age-ms"] = max(0, int((now - last_loss) * 1000))
         return info
 
+    def notify_send_waiters(self) -> None:
+        with self._pending_space:
+            self._pending_space.notify_all()
+
+    def wait_until_queued_below(self, limit: int, *, closed: Callable[[], bool]) -> bool:
+        """Block until pending-new-bytes is at most `limit`, or `closed` is true.
+
+        Returns False if the connection closed while waiting. The 50ms wait
+        timeout only re-checks `closed`; it is not a send deadline.
+        """
+        with self._pending_space:
+            while not closed() and self._statistics.get("pending-new-bytes", 0) > limit:
+                self._pending_space.wait(timeout=0.05)
+            return not closed()
+
     def update_pending_streams(self, quic: QuicConnection) -> None:
         # Called after transmit(), including ACK and recovery timer processing.
         # Readers on other threads only see the published snapshot.
         pending = get_pending_stream_info(quic)
         self._update_statistics(pending)
+        self.notify_send_waiters()
         if log.is_debug_enabled():
             now = monotonic()
             if now - self._last_pending_log_time >= 1:
