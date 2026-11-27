@@ -1,19 +1,19 @@
 Package: xpra
-Version: 8.0~890e404.rafaelgaspar.7
+Version: 8.0~05e8e7e.rafaelgaspar.8
 Architecture: amd64
 Maintainer: Antoine Martin <antoine@xpra.org>
 Installed-Size: 57
-Depends: xpra-client (= 8.0~890e404.rafaelgaspar.7), xpra-client-gtk3 (= 8.0~890e404.rafaelgaspar.7), xpra-server (= 8.0~890e404.rafaelgaspar.7), xpra-codecs (= 8.0~890e404.rafaelgaspar.7)
-Recommends: xpra-audio (= 8.0~890e404.rafaelgaspar.7), xpra-x11 (= 8.0~890e404.rafaelgaspar.7), xpra-codecs-extras (= 8.0~890e404.rafaelgaspar.7)
-Suggests: xpra-codecs-nvidia (= 8.0~890e404.rafaelgaspar.7), xpra-codecs-amd (= 8.0~890e404.rafaelgaspar.7), xpra-server-wayland (= 8.0~890e404.rafaelgaspar.7), xpra-wayland (= 8.0~890e404.rafaelgaspar.7)
+Depends: xpra-client (= 8.0~05e8e7e.rafaelgaspar.8), xpra-client-gtk3 (= 8.0~05e8e7e.rafaelgaspar.8), xpra-server (= 8.0~05e8e7e.rafaelgaspar.8), xpra-codecs (= 8.0~05e8e7e.rafaelgaspar.8)
+Recommends: xpra-audio (= 8.0~05e8e7e.rafaelgaspar.8), xpra-x11 (= 8.0~05e8e7e.rafaelgaspar.8), xpra-codecs-extras (= 8.0~05e8e7e.rafaelgaspar.8)
+Suggests: xpra-codecs-nvidia (= 8.0~05e8e7e.rafaelgaspar.8), xpra-codecs-amd (= 8.0~05e8e7e.rafaelgaspar.8), xpra-server-wayland (= 8.0~05e8e7e.rafaelgaspar.8), xpra-wayland (= 8.0~05e8e7e.rafaelgaspar.8)
 Homepage: https://xpra.org/
 Priority: optional
 Section: x11
-Filename: pool/main/x/xpra/xpra_8.0~890e404.rafaelgaspar.7_amd64.deb
-Size: 46516
-SHA256: bae6e03a595a4b51f4643522e91a217520461ad66576ce37593da58dd1e5ea64
-SHA1: 01576dbdbd22c638ec77a84d998eb7b52c384124
-MD5sum: c8d1785c9c6b1bef28d98130e99d10ce
+Filename: pool/main/x/xpra/xpra_8.0~05e8e7e.rafaelgaspar.8_amd64.deb
+Size: 46532
+SHA256: 1ea76769efd3e56ade21705c2693d9c946846b092d59d38733b0df54f528999c
+SHA1: 1bc739ae2f78cc75876a9680ba56ce01726930d2
+MD5sum: 18cfb5f38805b98a8e24b8cce0525d3c
 Description: tool to detach/reattach running X programs
  Xpra gives you the functionality of GNU Screen for X applications.
  .
@@ -27,11 +27,11 @@ Description: tool to detach/reattach running X programs
 
 Package: xpra-audio
 Source: xpra
-Version: 8.0~890e404.rafaelgaspar.7
+Version: 8.0~05e8e7e.rafaelgaspar.8
 Architecture: amd64
 Maintainer: Antoine Martin <antoine@xpra.org>
 Installed-Size: 221
-Depends: xpra-common (= 8.0~890e404.rafaelgaspar.7), python3:any (>= 3.6~), python3-gst-1.0, gstreamer1.0-plugins-base
+Depends: xpra-common (= 8.0~05e8e7e.rafaelgaspar.8), python3:any (>= 3.6~), python3-gst-1.0, gstreamer1.0-plugins-base
 Recommends: gstreamer1.0-tools, gstreamer1.0-alsa, gstreamer1.0-plugins-good, gstreamer1.0-plugins-bad, gstreamer1.0-plugins-ugly
 Suggests: xpra-audio-server
 Conflicts: python2-xpra, python3-xpra, xpra (<< 5)
@@ -39,69 +39,69 @@ Breaks: python2-xpra (<< 5), python3-xpra (<< 5), xpra (<< 5)
 Homepage: https://xpra.org/
 Priority: optional
 Section: x11
-Filename: pool/main/x/xpra/xpra-audio_8.0~890e404.rafaelgaspar.7_amd64.deb
-Size: 79896
-SHA256: fd281fb0d6ed85301b4af1c992982fc60171b021a7174e2caa2782255a500ee5
-SHA1: 35fa2bc640af228280d3fd415c6bdc8f96e49724
-MD5sum: 18b0f0b685c149b9751e022a28341353
+Filename: pool/main/x/xpra/xpra-audio_8.0~05e8e7e.rafaelgaspar.8_amd64.deb
+Size: 79892
+SHA256: 47d0afa6dcffe1ebd7021c01b55ec483a5d3cd66b175bdebdf888be2a73ba500
+SHA1: 000e0874c25cd0302fc4966231f3a9ad68629356
+MD5sum: 5f8241866bdc1125cfd828ceed0d651c
 Description: Components required for xpra audio forwarding,
  used by both client and servers.
 
 Package: xpra-audio-server
 Source: xpra
-Version: 8.0~890e404.rafaelgaspar.7
+Version: 8.0~05e8e7e.rafaelgaspar.8
 Architecture: amd64
 Maintainer: Antoine Martin <antoine@xpra.org>
 Installed-Size: 58
-Depends: xpra-audio (= 8.0~890e404.rafaelgaspar.7), pulseaudio, gstreamer1.0-pulseaudio, pulseaudio-utils
+Depends: xpra-audio (= 8.0~05e8e7e.rafaelgaspar.8), pulseaudio, gstreamer1.0-pulseaudio, pulseaudio-utils
 Homepage: https://xpra.org/
 Priority: optional
 Section: x11
-Filename: pool/main/x/xpra/xpra-audio-server_8.0~890e404.rafaelgaspar.7_amd64.deb
-Size: 45964
-SHA256: 413a436923d06a6d4c34d037c4203336ee933f98c7ab3744c3a1ee88c487585c
-SHA1: f8e7b9369a8c2d1c106d639f48c43743c89d3a1a
-MD5sum: cbfd194383dcee816789602dfa98a229
+Filename: pool/main/x/xpra/xpra-audio-server_8.0~05e8e7e.rafaelgaspar.8_amd64.deb
+Size: 45968
+SHA256: cadbe69049a799522437b477b626c28bc5b834c45189f5a05df481eaa862422e
+SHA1: d5ffa085dc3a5c0c6af0bd885c2a3ebb49f3d1c9
+MD5sum: 016f93e1521576f8cb805ad87c77050e
 Description: Components required for xpra audio forwarding,
  on the server side.
 
 Package: xpra-client
 Source: xpra
-Version: 8.0~890e404.rafaelgaspar.7
+Version: 8.0~05e8e7e.rafaelgaspar.8
 Architecture: amd64
 Maintainer: Antoine Martin <antoine@xpra.org>
 Installed-Size: 387
-Depends: xpra-common (= 8.0~890e404.rafaelgaspar.7), python3:any (>= 3.6~)
-Recommends: python3-socks, gir1.2-nm-1.0, gir1.2-notify-0.7, xpra-client-gtk3 (= 8.0~890e404.rafaelgaspar.7)
+Depends: xpra-common (= 8.0~05e8e7e.rafaelgaspar.8), python3:any (>= 3.6~)
+Recommends: python3-socks, gir1.2-nm-1.0, gir1.2-notify-0.7, xpra-client-gtk3 (= 8.0~05e8e7e.rafaelgaspar.8)
 Suggests: python-psutil, openssh-client, sshpass
 Conflicts: python2-xpra, python3-xpra, xpra (<< 5)
 Breaks: python2-xpra (<< 5), python3-xpra (<< 5), xpra (<< 5)
 Homepage: https://xpra.org/
 Priority: optional
 Section: x11
-Filename: pool/main/x/xpra/xpra-client_8.0~890e404.rafaelgaspar.7_amd64.deb
-Size: 111520
-SHA256: ec8331302fc08c00d97cd8c7b72c6aaf87468ba06309ed6af78faeda53f96f8a
-SHA1: cea9203b2625fa871a2b706a7fe65fbaf1a5974f
-MD5sum: cea586554e914b422e648d37df7e7008
+Filename: pool/main/x/xpra/xpra-client_8.0~05e8e7e.rafaelgaspar.8_amd64.deb
+Size: 111508
+SHA256: e5d53d218cf16c553640aa79607c0fa1b59d19cc0ab57a9ed43a4e05fd9a99e0
+SHA1: 216a1f9c9b5992534667952d9b0c0d90cc01b6af
+MD5sum: b8cfcee861e17fe4403b79f20a37844c
 Description: tool to detach/reattach running X programs,
  this is the client component without the GUI part
 
 Package: xpra-client-gnome
 Source: xpra
-Version: 8.0~890e404.rafaelgaspar.7
+Version: 8.0~05e8e7e.rafaelgaspar.8
 Architecture: amd64
 Maintainer: Antoine Martin <antoine@xpra.org>
 Installed-Size: 80
-Depends: xpra-client-gtk3 (= 8.0~890e404.rafaelgaspar.7), gnome-shell-extension-top-icons-plus, gnome-shell-extension-appindicator
+Depends: xpra-client-gtk3 (= 8.0~05e8e7e.rafaelgaspar.8), gnome-shell-extension-top-icons-plus, gnome-shell-extension-appindicator
 Homepage: https://xpra.org/
 Priority: optional
 Section: x11
-Filename: pool/main/x/xpra/xpra-client-gnome_8.0~890e404.rafaelgaspar.7_amd64.deb
-Size: 53452
-SHA256: b5a58acdf60c4a9fd13822edb27a4cd4d035135406c34e858287f1b60996b54d
-SHA1: b89890d0787c5544f3c94cf60b64f73049b08ddd
-MD5sum: 36eac26cccb6e254ea5c3bab5f800dbf
+Filename: pool/main/x/xpra/xpra-client-gnome_8.0~05e8e7e.rafaelgaspar.8_amd64.deb
+Size: 53448
+SHA256: 7c7fd9cfa4cd75181aa52b51fdf3711f862e94416d8a5b70d825dcefacb111eb
+SHA1: 26e80d1e21d8470f832717bb8219a11c485d45ee
+MD5sum: ae25ff8f40de872a3eef034e19787ef2
 Description: This package installs the GNOME Shell extensions
  that can help in restoring the system tray functionality.
  It also includes the input-source-manager@xpra_org extension which
@@ -109,256 +109,256 @@ Description: This package installs the GNOME Shell extensions
 
 Package: xpra-client-gtk3
 Source: xpra
-Version: 8.0~890e404.rafaelgaspar.7
+Version: 8.0~05e8e7e.rafaelgaspar.8
 Architecture: amd64
 Maintainer: Antoine Martin <antoine@xpra.org>
 Installed-Size: 1210
-Depends: xpra-client (= 8.0~890e404.rafaelgaspar.7), python3:any (>= 3.6~), gir1.2-gtk-3.0, python3-cairo, python3-gi-cairo, python3-pil
-Recommends: xpra-codecs (= 8.0~890e404.rafaelgaspar.7), xpra-audio (= 8.0~890e404.rafaelgaspar.7), xpra-codecs-extras (= 8.0~890e404.rafaelgaspar.7), xpra-x11 (= 8.0~890e404.rafaelgaspar.7), python3-opengl, python3-fido2, gir1.2-ayatanaappindicator3-0.1, gir1.2-ibus-1.0
-Suggests: xpra-codecs-nvidia (= 8.0~890e404.rafaelgaspar.7), python-psutil, python3-libcamera, xpra-client-gnome, pinentry-gnome3
+Depends: xpra-client (= 8.0~05e8e7e.rafaelgaspar.8), python3:any (>= 3.6~), gir1.2-gtk-3.0, python3-cairo, python3-gi-cairo, python3-pil
+Recommends: xpra-codecs (= 8.0~05e8e7e.rafaelgaspar.8), xpra-audio (= 8.0~05e8e7e.rafaelgaspar.8), xpra-codecs-extras (= 8.0~05e8e7e.rafaelgaspar.8), xpra-x11 (= 8.0~05e8e7e.rafaelgaspar.8), python3-opengl, python3-fido2, gir1.2-ayatanaappindicator3-0.1, gir1.2-ibus-1.0
+Suggests: xpra-codecs-nvidia (= 8.0~05e8e7e.rafaelgaspar.8), python-psutil, python3-libcamera, xpra-client-gnome, pinentry-gnome3
 Conflicts: python2-xpra, python3-xpra, xpra (<< 5)
 Breaks: python2-xpra (<< 5), python3-xpra (<< 5), xpra (<< 5)
 Homepage: https://xpra.org/
 Priority: optional
 Section: x11
-Filename: pool/main/x/xpra/xpra-client-gtk3_8.0~890e404.rafaelgaspar.7_amd64.deb
-Size: 253012
-SHA256: 5ee15604c264c4c301e9c942f4c37b5e73e1250b9bb4bb296aca3816873a193b
-SHA1: 1e666bb038f5b03ddafc9e4a7ddf9a8d47fc7d8c
-MD5sum: 0b17f49075e054d9711c4aae235835c6
+Filename: pool/main/x/xpra/xpra-client-gtk3_8.0~05e8e7e.rafaelgaspar.8_amd64.deb
+Size: 253052
+SHA256: b030052da2799574f909da8320ead70c087b11c9f45abee5a36155d89919a8ab
+SHA1: 5b1b452b89081436d712cb38ebb12fa55915c6b7
+MD5sum: d60f953f4dcc8eef40226b650f99a7d7
 Description: tool to detach/reattach running X programs,
  this is the xpra client user interface using GTK3
 
 Package: xpra-client-qt6
 Source: xpra
-Version: 8.0~890e404.rafaelgaspar.7
+Version: 8.0~05e8e7e.rafaelgaspar.8
 Architecture: amd64
 Maintainer: Antoine Martin <antoine@xpra.org>
 Installed-Size: 85
-Depends: xpra-client (= 8.0~890e404.rafaelgaspar.7), python3:any (>= 3.6~), python3-pil, python3-pyqt6
+Depends: xpra-client (= 8.0~05e8e7e.rafaelgaspar.8), python3:any (>= 3.6~), python3-pil, python3-pyqt6
 Conflicts: python2-xpra, python3-xpra, xpra (<< 5)
 Breaks: python2-xpra (<< 5), python3-xpra (<< 5), xpra (<< 5)
 Homepage: https://xpra.org/
 Priority: optional
 Section: x11
-Filename: pool/main/x/xpra/xpra-client-qt6_8.0~890e404.rafaelgaspar.7_amd64.deb
-Size: 52236
-SHA256: a8cf6990f49f986e29e1676c0c04087862f46ce1638e1163cf9e7fd39e55059c
-SHA1: dbbec3d5f66de0795ae5fd94ed98f00a86e0c0e0
-MD5sum: 323533cc5619ed5567789756bf77f394
+Filename: pool/main/x/xpra/xpra-client-qt6_8.0~05e8e7e.rafaelgaspar.8_amd64.deb
+Size: 52244
+SHA256: 7e01e6a1d9dd26a546c2013dcdf2c3a61a183ad93350254a2ff94a7cadb825d0
+SHA1: a70a0effc22599d84dd6da738e0bc9f7a4daf424
+MD5sum: aa9e39e436523151e39a325c3b078b0e
 Description: tool to detach/reattach running X programs,
  this is the xpra client user interface using PyQt6
 
 Package: xpra-client-terminal
 Source: xpra
-Version: 8.0~890e404.rafaelgaspar.7
+Version: 8.0~05e8e7e.rafaelgaspar.8
 Architecture: amd64
 Maintainer: Antoine Martin <antoine@xpra.org>
 Installed-Size: 232
-Depends: xpra-client-gtk3 (= 8.0~890e404.rafaelgaspar.7), python3:any (>= 3.6~)
+Depends: xpra-client-gtk3 (= 8.0~05e8e7e.rafaelgaspar.8), python3:any (>= 3.6~)
 Conflicts: python2-xpra, python3-xpra, xpra (<< 5)
 Breaks: python2-xpra (<< 5), python3-xpra (<< 5), xpra (<< 5)
 Homepage: https://xpra.org/
 Priority: optional
 Section: x11
-Filename: pool/main/x/xpra/xpra-client-terminal_8.0~890e404.rafaelgaspar.7_amd64.deb
-Size: 84740
-SHA256: 09e06bafd34aa6b71dee08eb7c581621dfbdffd045411538b321673fcff82697
-SHA1: 22fba05df8108ff126cb0db0c3fdc6837eacd90f
-MD5sum: ebdbbea6da5a588d6c3651f2f29d675c
+Filename: pool/main/x/xpra/xpra-client-terminal_8.0~05e8e7e.rafaelgaspar.8_amd64.deb
+Size: 84744
+SHA256: d0129f94275bc0f0f870d424a45261f9e583023d0c41da9c9982ffb780c5bb3e
+SHA1: 93bb6fb54cf6a26913f0798162a02a51f1ed2a43
+MD5sum: 7397e2bf62c37d56203875e7109cc0e8
 Description: tool to detach/reattach running X programs,
  this is the xpra client rendering to a terminal emulator
  using the kitty graphics protocol
 
 Package: xpra-codecs
 Source: xpra
-Version: 8.0~890e404.rafaelgaspar.7
+Version: 8.0~05e8e7e.rafaelgaspar.8
 Architecture: amd64
 Maintainer: Antoine Martin <antoine@xpra.org>
 Installed-Size: 4284
-Depends: xpra-common (= 8.0~890e404.rafaelgaspar.7), libaom3 (>= 3.2.0), libc6 (>= 2.27), libdav1d7 (>= 0.1.0), libdrm2 (>= 2.4.65), libopenh264-8 (>= 2.6.0+dfsg), libopenjph0.33 (>= 0.33.0), libstdc++6 (>= 4.1.1), libturbojpeg0 (>= 1:1.4.0), libva-drm2 (>= 1.1.0), libva2 (>= 2.2.0), libvpl2 (>= 1:2.17.0), libvpx12 (>= 1.16.0), libwebp7 (>= 1.6.0), libx264-165 (>= 2:0.165.3223+git20250910.0480cb0), libyuv0 (>= 0.0.1984), python3 (<< 3.15), python3 (>= 3.14~), python3:any (>= 3.6~)
+Depends: xpra-common (= 8.0~05e8e7e.rafaelgaspar.8), libaom3 (>= 3.2.0), libc6 (>= 2.27), libdav1d7 (>= 0.1.0), libdrm2 (>= 2.4.65), libopenh264-8 (>= 2.6.0+dfsg), libopenjph0.33 (>= 0.33.0), libstdc++6 (>= 4.1.1), libturbojpeg0 (>= 1:1.4.0), libva-drm2 (>= 1.1.0), libva2 (>= 2.2.0), libvpl2 (>= 1:2.17.0), libvpx12 (>= 1.16.0), libwebp7 (>= 1.6.0), libx264-165 (>= 2:0.165.3223+git20250910.0480cb0), libyuv0 (>= 0.0.1984), python3 (<< 3.15), python3 (>= 3.14~), python3:any (>= 3.6~)
 Recommends: libpipewire-0.3-0t64
-Suggests: v4l2loopback-dkms, xpra-codecs-nvidia (= 8.0~890e404.rafaelgaspar.7), xpra-codecs-amd (= 8.0~890e404.rafaelgaspar.7)
+Suggests: v4l2loopback-dkms, xpra-codecs-nvidia (= 8.0~05e8e7e.rafaelgaspar.8), xpra-codecs-amd (= 8.0~05e8e7e.rafaelgaspar.8)
 Conflicts: python2-xpra, python3-xpra, xpra (<< 5)
 Breaks: python2-xpra (<< 5), python3-xpra (<< 5), xpra (<< 5)
 Homepage: https://xpra.org/
 Priority: optional
 Section: x11
-Filename: pool/main/x/xpra/xpra-codecs_8.0~890e404.rafaelgaspar.7_amd64.deb
-Size: 1229356
-SHA256: a37e3dfd076e5858fce01d21778ea0f86d32735d496b2b6d49edf4dcfdac1048
-SHA1: 64640f2db76e115fa401fee9ac6ed287dd4f7938
-MD5sum: 83d9bec6a52d5588a42b140b39ebefa0
+Filename: pool/main/x/xpra/xpra-codecs_8.0~05e8e7e.rafaelgaspar.8_amd64.deb
+Size: 1228920
+SHA256: b9b01a697f1d4a2eb742f3510abcd051ec4810062790e03dac36c68e0ed912e0
+SHA1: c5ecfcb801434744ccecb2ebe12fb859cc29989e
+MD5sum: c2b49e69b9c9f80e6a5f942f84735af8
 Description: Picture and video codecs
  for the xpra server and client.
 
 Package: xpra-codecs-amd
 Source: xpra
-Version: 8.0~890e404.rafaelgaspar.7
+Version: 8.0~05e8e7e.rafaelgaspar.8
 Architecture: amd64
 Maintainer: Antoine Martin <antoine@xpra.org>
 Installed-Size: 56
-Depends: xpra-codecs (= 8.0~890e404.rafaelgaspar.7), amf-amdgpu-pro
-Enhances: xpra-codecs (= 8.0~890e404.rafaelgaspar.7)
+Depends: xpra-codecs (= 8.0~05e8e7e.rafaelgaspar.8), amf-amdgpu-pro
+Enhances: xpra-codecs (= 8.0~05e8e7e.rafaelgaspar.8)
 Conflicts: python2-xpra, python3-xpra, xpra (<< 5), xpra-codecs (<< 6)
 Breaks: python2-xpra (<< 5), python3-xpra (<< 5), xpra (<< 5)
 Homepage: https://xpra.org/
 Priority: optional
 Section: x11
-Filename: pool/main/x/xpra/xpra-codecs-amd_8.0~890e404.rafaelgaspar.7_amd64.deb
+Filename: pool/main/x/xpra/xpra-codecs-amd_8.0~05e8e7e.rafaelgaspar.8_amd64.deb
 Size: 45956
-SHA256: d459715480e75d4fb730f01dfc71e4b6566cb3a5844d6d2ec317c0e6e2a0b85d
-SHA1: acba9e0592ee93dbee299affe66b25b97aaad6bb
-MD5sum: 798caf4eee7b5e9293f121a82f4970ae
+SHA256: c2196f5a61762cb3a8d89fff490e3ec0bac32fa30a4b72d2d90e8314a8331d1e
+SHA1: 6743014db46eee5e3ac85ab6ad58d6bd876d0d49
+MD5sum: 83d7608c4086b2ffa290d5d4ee32a739
 Description: Proprietary AMD video codecs
  for the xpra server and client.
 
 Package: xpra-codecs-extras
 Source: xpra
-Version: 8.0~890e404.rafaelgaspar.7
+Version: 8.0~05e8e7e.rafaelgaspar.8
 Architecture: amd64
 Maintainer: Antoine Martin <antoine@xpra.org>
 Installed-Size: 393
-Depends: xpra-codecs (= 8.0~890e404.rafaelgaspar.7), libavif16 (>= 1.4.2), libc6 (>= 2.4), libde265-0 (>= 1.0.7), python3 (<< 3.15), python3 (>= 3.14~), python3:any (>= 3.6~)
+Depends: xpra-codecs (= 8.0~05e8e7e.rafaelgaspar.8), libavif16 (>= 1.4.2), libc6 (>= 2.4), libde265-0 (>= 1.0.7), python3 (<< 3.15), python3 (>= 3.14~), python3:any (>= 3.6~)
 Suggests: python3-torchvision
-Enhances: xpra-codecs (= 8.0~890e404.rafaelgaspar.7)
+Enhances: xpra-codecs (= 8.0~05e8e7e.rafaelgaspar.8)
 Conflicts: python2-xpra, python3-xpra, xpra (<< 5), xpra-codecs (<< 6)
 Breaks: python2-xpra (<< 5), python3-xpra (<< 5), xpra (<< 5)
 Homepage: https://xpra.org/
 Priority: optional
 Section: x11
-Filename: pool/main/x/xpra/xpra-codecs-extras_8.0~890e404.rafaelgaspar.7_amd64.deb
-Size: 150124
-SHA256: 95ad9c41c56cc874484eab53134568cf26592a03a9ced78eca2fe362e4d08b86
-SHA1: 4a8ca0952f5f478623d081525723e69fb7fe7d03
-MD5sum: a81a4c01998c827fdeb1fd4c4b3706be
+Filename: pool/main/x/xpra/xpra-codecs-extras_8.0~05e8e7e.rafaelgaspar.8_amd64.deb
+Size: 150264
+SHA256: ef4d894ccc67293830edca739f11a1479194f87779ccbfa406406420d6e51c13
+SHA1: 2955ed84516b78d5efc3cc3abe243c5bb9f8c617
+MD5sum: 3c59cc48fe57a6d158d075f438dbdf87
 Description: Extra picture and video codecs
  for the xpra server and client.
 
 Package: xpra-codecs-nvidia
 Source: xpra
-Version: 8.0~890e404.rafaelgaspar.7
+Version: 8.0~05e8e7e.rafaelgaspar.8
 Architecture: amd64
 Maintainer: Antoine Martin <antoine@xpra.org>
 Installed-Size: 1896
-Depends: xpra-codecs (= 8.0~890e404.rafaelgaspar.7), python3 (<< 3.15), python3 (>= 3.14~), python3:any (>= 3.6~)
+Depends: xpra-codecs (= 8.0~05e8e7e.rafaelgaspar.8), python3 (<< 3.15), python3 (>= 3.14~), python3:any (>= 3.6~)
 Recommends: python3-pycuda, libnvidia-encode1, libnvjpeg, libnvidia-fbc1
-Enhances: xpra-codecs (= 8.0~890e404.rafaelgaspar.7)
+Enhances: xpra-codecs (= 8.0~05e8e7e.rafaelgaspar.8)
 Conflicts: python2-xpra, python3-xpra, xpra (<< 5), xpra-codecs (<< 6)
 Breaks: python2-xpra (<< 5), python3-xpra (<< 5), xpra (<< 5)
 Homepage: https://xpra.org/
 Priority: optional
 Section: x11
-Filename: pool/main/x/xpra/xpra-codecs-nvidia_8.0~890e404.rafaelgaspar.7_amd64.deb
-Size: 443588
-SHA256: 85843a90cd9044a9cc6a4bdee88242a96b9c57c59ec370a9f4beaf811dbcf5ff
-SHA1: bc1f4e4bc8c62e31210e4d46c86acdd55b4daeca
-MD5sum: 37e532210663b7220fe559d99bd9d909
+Filename: pool/main/x/xpra/xpra-codecs-nvidia_8.0~05e8e7e.rafaelgaspar.8_amd64.deb
+Size: 443912
+SHA256: 08c5194a60e1b81452f616d09facf3e74bf01097a99e71e792979b03af7ca56e
+SHA1: f27250342774470a1d60b55dde82ed525834f219
+MD5sum: 4ae54f78fe1d10dd49acc25af9b34275
 Description: Proprietary nvidia picture and video codecs
  for the xpra server and client: nvfbc, nvjpeg and nvenc.
 
 Package: xpra-common
 Source: xpra
-Version: 8.0~890e404.rafaelgaspar.7
+Version: 8.0~05e8e7e.rafaelgaspar.8
 Architecture: amd64
 Maintainer: Antoine Martin <antoine@xpra.org>
-Installed-Size: 15606
+Installed-Size: 15608
 Depends: python3 (<< 3.15), python3 (>= 3.14~), python3:any (>= 3.6~), libc6 (>= 2.14), libcairo2 (>= 1.6.0), liblz4-1 (>= 1.8.2), libpam0g (>= 0.99.7.1), libseccomp2 (>= 2.1.0), libx11-6, libxxhash0 (>= 0.7.0), libzstd1 (>= 1.5.5), python3-gi, gir1.2-glib-2.0
 Recommends: libqrencode4 (>= 3.3.0), libbrotli1 (>= 0.6.0), python3-asyncssh, python3-paramiko, python3-dnspython, python3-cryptography, python3-aioquic (>= 1.9.0), python3-zeroconf, python3-netifaces, python3-cups
 Suggests: openssh-server, python3-yaml
 Conflicts: python2-xpra, python3-xpra, xpra (<< 5)
-Breaks: python2-xpra (<< 5), python3-xpra (<< 5), xpra (<< 8.0~890e404.rafaelgaspar.7), xpra-server (<< 8.0~890e404.rafaelgaspar.7)
-Replaces: xpra-server (<< 8.0~890e404.rafaelgaspar.7)
+Breaks: python2-xpra (<< 5), python3-xpra (<< 5), xpra (<< 8.0~05e8e7e.rafaelgaspar.8), xpra-server (<< 8.0~05e8e7e.rafaelgaspar.8)
+Replaces: xpra-server (<< 8.0~05e8e7e.rafaelgaspar.8)
 Homepage: https://xpra.org/
 Priority: optional
 Section: x11
-Filename: pool/main/x/xpra/xpra-common_8.0~890e404.rafaelgaspar.7_amd64.deb
-Size: 8661548
-SHA256: d94a994ebc5bfacf97677e89e9135a030503f0bf4513ff0c374ec6115490ca95
-SHA1: 75e906f3faaf55f114e5cb7a04386b2e79066807
-MD5sum: 28fa7528d10b853e0ef459fea64dbdde
+Filename: pool/main/x/xpra/xpra-common_8.0~05e8e7e.rafaelgaspar.8_amd64.deb
+Size: 8661584
+SHA256: 9111c7fcf619364fd2e1b14aba16fd31749b4a55dc64f67dcd8f005c0675d56b
+SHA1: 63ce8cbc77d1dddaca77475de845c6bc48285fb1
+MD5sum: 67d72d82c45b8ee803e9d97870c4d669
 Description: tool to detach/reattach running X programs,
  this is the common components for all xpra sub-packages
 
 Package: xpra-server
 Source: xpra
-Version: 8.0~890e404.rafaelgaspar.7
+Version: 8.0~05e8e7e.rafaelgaspar.8
 Architecture: amd64
 Maintainer: Antoine Martin <antoine@xpra.org>
-Installed-Size: 2195
-Depends: xpra-common (= 8.0~890e404.rafaelgaspar.7), python3 (<< 3.15), python3 (>= 3.14~), python3:any (>= 3.6~), python3-cairo, python3-pil, openssl, xserver-xorg-core, xserver-xorg-video-dummy, xvfb, keyboard-configuration, adduser
-Recommends: xpra-codecs (= 8.0~890e404.rafaelgaspar.7), xpra-audio-server, xpra-codecs-extras (= 8.0~890e404.rafaelgaspar.7), xpra-x11 (= 8.0~890e404.rafaelgaspar.7), xpra-html5, python3-gi-cairo, libsystemd, libc6 (>= 2.4), python3-dbus, dbus-x11, ibus, python3-setproctitle, python3-xdg, python3-watchdog, gir1.2-rsvg-2.0, gir1.2-ibus-1.0, cups-filters, cups-common, cups-pdf, cups-daemon, xterm
-Suggests: xpra-codecs-nvidia (= 8.0~890e404.rafaelgaspar.7), xpra-codecs-amd (= 8.0~890e404.rafaelgaspar.7), openssh-server, python3-opengl, gir1.2-gtk-3.0, python3-kerberos, python3-gssapi, python3-scramp, python3-oauthlib
+Installed-Size: 2197
+Depends: xpra-common (= 8.0~05e8e7e.rafaelgaspar.8), python3 (<< 3.15), python3 (>= 3.14~), python3:any (>= 3.6~), python3-cairo, python3-pil, openssl, xserver-xorg-core, xserver-xorg-video-dummy, xvfb, keyboard-configuration, adduser
+Recommends: xpra-codecs (= 8.0~05e8e7e.rafaelgaspar.8), xpra-audio-server, xpra-codecs-extras (= 8.0~05e8e7e.rafaelgaspar.8), xpra-x11 (= 8.0~05e8e7e.rafaelgaspar.8), xpra-html5, python3-gi-cairo, libsystemd, libc6 (>= 2.4), python3-dbus, dbus-x11, ibus, python3-setproctitle, python3-xdg, python3-watchdog, gir1.2-rsvg-2.0, gir1.2-ibus-1.0, cups-filters, cups-common, cups-pdf, cups-daemon, xterm
+Suggests: xpra-codecs-nvidia (= 8.0~05e8e7e.rafaelgaspar.8), xpra-codecs-amd (= 8.0~05e8e7e.rafaelgaspar.8), openssh-server, python3-opengl, gir1.2-gtk-3.0, python3-kerberos, python3-gssapi, python3-scramp, python3-oauthlib
 Conflicts: python2-xpra, python3-xpra, xpra (<< 5)
 Breaks: python2-xpra (<< 5), python3-xpra (<< 5), xpra (<< 5)
 Homepage: https://xpra.org/
 Priority: optional
 Section: x11
-Filename: pool/main/x/xpra/xpra-server_8.0~890e404.rafaelgaspar.7_amd64.deb
-Size: 467920
-SHA256: 72fd6ab2eb96bfedd4b7accf502b616dc5ecf0943febd76f4aae61866b380a5c
-SHA1: 358ba5b5fda113fccdfce42cf59529567fdd6bde
-MD5sum: eeda2fbb530222dcd4f171265e7a84c2
+Filename: pool/main/x/xpra/xpra-server_8.0~05e8e7e.rafaelgaspar.8_amd64.deb
+Size: 468340
+SHA256: 0b9cafbe4a403dac87de2f10ec2deec128f53903040ed02418513fee9f45868c
+SHA1: cd92d1488daf46a42688f10881532c377bb69d6d
+MD5sum: ffae36549b1fbcd2ed6b7907cb35a917
 Description: tool to detach/reattach running X programs,
  this is server component allowing you to start sessions
 
 Package: xpra-server-wayland
 Source: xpra
-Version: 8.0~890e404.rafaelgaspar.7
+Version: 8.0~05e8e7e.rafaelgaspar.8
 Architecture: amd64
 Maintainer: Antoine Martin <antoine@xpra.org>
 Installed-Size: 1394
-Depends: xpra-server (= 8.0~890e404.rafaelgaspar.7), xpra-wayland (= 8.0~890e404.rafaelgaspar.7), python3 (<< 3.15), python3 (>= 3.14~), python3:any (>= 3.6~), libc6 (>= 2.17), libwayland-server0 (>= 1.14.91), libwlroots-0.20 (>= 0.20.0~)
+Depends: xpra-server (= 8.0~05e8e7e.rafaelgaspar.8), xpra-wayland (= 8.0~05e8e7e.rafaelgaspar.8), python3 (<< 3.15), python3 (>= 3.14~), python3:any (>= 3.6~), libc6 (>= 2.17), libwayland-server0 (>= 1.14.91), libwlroots-0.20 (>= 0.20.0~)
 Conflicts: python2-xpra, python3-xpra, xpra (<< 5)
 Breaks: python2-xpra (<< 5), python3-xpra (<< 5), xpra (<< 5)
 Homepage: https://xpra.org/
 Priority: optional
 Section: x11
-Filename: pool/main/x/xpra/xpra-server-wayland_8.0~890e404.rafaelgaspar.7_amd64.deb
-Size: 405528
-SHA256: d8104821720e274cb2c2a3087b32af088652ae2455ae2c066a03bbc1c5cdc84c
-SHA1: 502e9feebb660f8bf54cdba2c1768ef429c621f4
-MD5sum: 46b21ccf4ac35ade64e0ab47f8c6c801
+Filename: pool/main/x/xpra/xpra-server-wayland_8.0~05e8e7e.rafaelgaspar.8_amd64.deb
+Size: 406048
+SHA256: da5206f7ccbc16e9a46175042256ce1a5521de917248c5a139680a8920e02819
+SHA1: f08e0caa6a1fd1e7f574092ddff6a8c83f4f6ebd
+MD5sum: 5a64ae4f9c457f51c6b0d222a87f1143
 Description: tool to detach/reattach running X programs,
  this is the experimental xpra server using wayland as backend
 
 Package: xpra-wayland
 Source: xpra
-Version: 8.0~890e404.rafaelgaspar.7
+Version: 8.0~05e8e7e.rafaelgaspar.8
 Architecture: amd64
 Maintainer: Antoine Martin <antoine@xpra.org>
 Installed-Size: 103
-Depends: xpra-common (= 8.0~890e404.rafaelgaspar.7), python3 (<< 3.15), python3 (>= 3.14~), python3:any (>= 3.6~), libc6 (>= 2.4), libwayland-client0 (>= 1.0.2)
-Breaks: xpra-common (<< 8.0~890e404.rafaelgaspar.7)
-Replaces: xpra-common (<< 8.0~890e404.rafaelgaspar.7)
+Depends: xpra-common (= 8.0~05e8e7e.rafaelgaspar.8), python3 (<< 3.15), python3 (>= 3.14~), python3:any (>= 3.6~), libc6 (>= 2.4), libwayland-client0 (>= 1.0.2)
+Breaks: xpra-common (<< 8.0~05e8e7e.rafaelgaspar.8)
+Replaces: xpra-common (<< 8.0~05e8e7e.rafaelgaspar.8)
 Homepage: https://xpra.org/
 Priority: optional
 Section: x11
-Filename: pool/main/x/xpra/xpra-wayland_8.0~890e404.rafaelgaspar.7_amd64.deb
-Size: 60980
-SHA256: b7424d5db66efae9eb8a8f9b24cc48e687ed14ede510215c8b1753d400fcf5d6
-SHA1: 23eeddc583f7c156aeadf39d7d2a13a1a169d1da
-MD5sum: 20b772d16440a934f019f7e098f0e4f8
+Filename: pool/main/x/xpra/xpra-wayland_8.0~05e8e7e.rafaelgaspar.8_amd64.deb
+Size: 60976
+SHA256: 26248c9f2ff9d2d9696893dfd6199bcf0fdc8b86a2c53d34fcdb1465254a8c5b
+SHA1: 682c5ae80cdd56ae5309155275f16dcc072f75c9
+MD5sum: 9d421bc9d3341bc1b15b3bb5d50689a1
 Description: tool to detach/reattach running X programs,
  this package contains the base xpra wayland support,
  including the `xpra wait-for-wayland` subcommand
 
 Package: xpra-x11
 Source: xpra
-Version: 8.0~890e404.rafaelgaspar.7
+Version: 8.0~05e8e7e.rafaelgaspar.8
 Architecture: amd64
 Maintainer: Antoine Martin <antoine@xpra.org>
-Installed-Size: 3687
+Installed-Size: 3691
 Depends: python3 (<< 3.15), python3 (>= 3.14~), python3:any (>= 3.6~), libc6 (>= 2.14), libglib2.0-0t64 (>= 2.12.0), libx11-6 (>= 2:1.2.99.901), libxcomposite1 (>= 1:0.4.6), libxcursor1 (>> 1.1.2), libxdamage1 (>= 1:1.1), libxext6, libxfixes3, libxi6 (>= 2:1.2.99.4), libxkbfile1 (>= 1:1.1.0), libxpresent1 (>= 1.0.1), libxrandr2 (>= 2:1.5.0), libxres1 (>= 2:1.2.1), libxtst6 (>= 2:1.2.6), python3-cairo, python3-gi
 Recommends: python3-lxml
 Homepage: https://xpra.org/
 Priority: optional
 Section: x11
-Filename: pool/main/x/xpra/xpra-x11_8.0~890e404.rafaelgaspar.7_amd64.deb
-Size: 964424
-SHA256: 4c4bc612132e968ae794be76d246291a021c1ba18e736fdfae9a5f44a5f83e2f
-SHA1: 422b4daf1d2130b3a533d1e9f6a8fd7c460cd8de
-MD5sum: b46fe1ac35acd6a9279b0fc92a37b3f1
+Filename: pool/main/x/xpra/xpra-x11_8.0~05e8e7e.rafaelgaspar.8_amd64.deb
+Size: 965712
+SHA256: d7b14c92c2857dae18d4674b3b724dca22ca116a2e94654b83a993c2ec1b16eb
+SHA1: abfebe839bf35d1633a5d7b0519fdcea89d90502
+MD5sum: 2a3b41ac77679814dc94e046850a93ab
 Description: tool to detach/reattach running X programs,
  this package contains the X11 bindings
  used by both the server and client under X11
