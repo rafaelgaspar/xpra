@@ -212,6 +212,7 @@ OPTION_TYPES: dict[str, Any] = {
     "start"             : list,
     "start-late"        : list,
     "start-child"       : list,
+    "adopt-children"    : list,
     "start-child-late"  : list,
     "start-after-connect"       : list,
     "start-child-after-connect" : list,
