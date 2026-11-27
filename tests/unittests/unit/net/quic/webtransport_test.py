@@ -21,7 +21,8 @@ try:
     from aioquic.buffer import encode_uint_var
     from aioquic.quic.configuration import QuicConfiguration
     from aioquic.quic.connection import QuicConnection
-    from aioquic.h3.connection import H3Connection, H3_ALPN
+    from aioquic.h3.connection import H3_ALPN
+    from xpra.net.quic.h3conn import XpraH3Connection
     from aioquic.h3.events import DataReceived, WebTransportStreamDataReceived
     from unit.net.quic.datagram_test import make_certificate, SyncLoop, ADDR
     HAVE_AIOQUIC = True
@@ -61,8 +62,8 @@ class WebTransportPair:
         self.cquic = QuicConnection(configuration=cconfig)
         self.squic = QuicConnection(configuration=sconfig,
                                     original_destination_connection_id=self.cquic.original_destination_connection_id)
-        self.chttp = H3Connection(self.cquic, enable_webtransport=True)
-        self.shttp = H3Connection(self.squic, enable_webtransport=True)
+        self.chttp = XpraH3Connection(self.cquic, enable_webtransport=True)
+        self.shttp = XpraH3Connection(self.squic, enable_webtransport=True)
         self.client_events = []
         self.cquic.connect(ADDR, now=self.now)
         self.settle()
