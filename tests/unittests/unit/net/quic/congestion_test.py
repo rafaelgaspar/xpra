@@ -80,7 +80,7 @@ class QuicCongestionTest(unittest.TestCase):
         self.assertEqual(info["rtt-samples"], 30)
         self.assertEqual(info["rtt-min-ms"], 50)
         self.assertEqual(info["rtt-latest-ms"], 100)
-        self.assertAlmostEqual(info["rtt-smoothed-ms"], 100 - 50 * (7 / 8) ** 20)
+        self.assertEqual(info["rtt-smoothed-ms"], round(100 - 50 * (7 / 8) ** 20))
 
     def test_recovery_callbacks(self):
         from aioquic.quic.rangeset import RangeSet
@@ -102,7 +102,7 @@ class QuicCongestionTest(unittest.TestCase):
         self.assertEqual(info["loss-events"], 1)
         self.assertEqual(info["bytes-in-flight"], 1200)
         self.assertEqual(info["congestion-window"], 7200)
-        self.assertAlmostEqual(info["rtt-latest-ms"], 95)
+        self.assertEqual(info["rtt-latest-ms"], 95)
         recovery.discard_space(space)
         info = control.get_info()
         self.assertEqual(info["packets-expired"], 1)
@@ -341,7 +341,7 @@ class QuicCongestionTest(unittest.TestCase):
             recent = control.get_info()["recent"]
             self.assertEqual(recent["status"], "insufficient")
             self.assertNotIn("acked-bitrate", recent)
-            self.assertNotIn("loss-fraction", recent)
+            self.assertNotIn("loss-ppm", recent)
 
             clock.return_value = 0.5
             control.on_packet_acked(now=1.2, packet=packets[1])
@@ -354,7 +354,7 @@ class QuicCongestionTest(unittest.TestCase):
             self.assertEqual(recent["acked-bitrate"], 38400)
             self.assertEqual(recent["packets-acked"], 2)
             self.assertEqual(recent["bytes-lost"], 1200)
-            self.assertEqual(recent["loss-fraction"], 1 / 3)
+            self.assertEqual(recent["loss-ppm"], 333333)
             self.assertEqual(info["last-loss-age-ms"], 0)
 
             # Reads must age both the rate and the last loss without callbacks.
@@ -368,7 +368,7 @@ class QuicCongestionTest(unittest.TestCase):
             self.assertEqual(info["recent"]["bytes-acked"], 0)
             self.assertEqual(info["recent"]["bytes-lost"], 0)
             self.assertNotIn("acked-bitrate", info["recent"])
-            self.assertNotIn("loss-fraction", info["recent"])
+            self.assertNotIn("loss-ppm", info["recent"])
             self.assertEqual(info["last-loss-age-ms"], 1000)
             self.assertEqual(info["packets-lost"], 1)
 
@@ -426,7 +426,7 @@ class QuicCongestionTest(unittest.TestCase):
             self.assertEqual(recent["duration-ms"], 1000)
             self.assertEqual(recent["bytes-acked"], 2400)
             self.assertEqual(recent["acked-bitrate"], 19200)
-            self.assertEqual(recent["loss-fraction"], 0)
+            self.assertEqual(recent["loss-ppm"], 0)
             self.assertEqual(recent["bytes-lost"], 0)
             self.assertEqual(info["bytes-lost"], 1200)
 
@@ -444,9 +444,33 @@ class QuicCongestionTest(unittest.TestCase):
                 clock.return_value = 1
                 recent = control.get_info()["recent"]
                 self.assertEqual(recent["rtt-samples"], 4)
-                self.assertAlmostEqual(recent["rtt-trend-ms"], delta_ms)
+                self.assertEqual(recent["rtt-trend-ms"], delta_ms)
                 clock.return_value = 1.5
                 self.assertNotIn("rtt-trend-ms", control.get_info()["recent"])
+
+    def test_info_is_packet_safe(self):
+        from xpra.net.common import Packet
+        from xpra.net.protocol.check import packet_structure_error
+        from xpra.net.quic.congestion import XpraRenoCongestionControl
+        with patch("xpra.net.quic.congestion.monotonic", return_value=0) as clock:
+            control = XpraRenoCongestionControl(max_datagram_size=1200)
+            self.assertEqual(packet_structure_error(Packet("hello", control.get_info())), "")
+            packets = [packet(i) for i in range(4)]
+            for p in packets:
+                control.on_packet_sent(packet=p)
+            for i, t in enumerate((0.2, 0.4, 0.6, 0.8)):
+                clock.return_value = t
+                control.on_packet_acked(now=2 + t, packet=packets[i])
+                control.on_rtt_measurement(now=2 + t, rtt=0.05 if t < 0.5 else 0.09)
+            control.on_packets_lost(now=2.8, packets=iter([packet(4)]))
+            clock.return_value = 1
+            info = control.get_info()
+            recent = info["recent"]
+            for key in ("rtt-latest-ms", "rtt-min-ms", "rtt-smoothed-ms"):
+                self.assertIsInstance(info[key], int)
+            self.assertIsInstance(recent["rtt-trend-ms"], int)
+            self.assertIsInstance(recent["loss-ppm"], int)
+            self.assertEqual(packet_structure_error(Packet("hello", info)), "")
 
     def test_sampling_buckets_are_bounded(self):
         from xpra.net.quic.congestion import XpraRenoCongestionControl

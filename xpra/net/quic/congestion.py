@@ -89,7 +89,8 @@ def get_recent_info(samples: tuple[CongestionSample, ...], started: float | None
         info["acked-bitrate"] = int(8 * acked_bytes / duration)
         # Use resolved packets as the denominator: packets still in flight and
         # expired packets have not been reported as either acknowledged or lost.
-        info["loss-fraction"] = lost / (acked + lost)
+        # Info packets cannot carry floats (`walk_packet`), so publish ppm.
+        info["loss-ppm"] = int(lost * 1_000_000 / (acked + lost))
     if duration >= MIN_SAMPLE_DURATION:
         # Compare average RTT in the newer half of the window with the older
         # half. A positive delta means RTT is increasing; units are milliseconds.
@@ -99,8 +100,10 @@ def get_recent_info(samples: tuple[CongestionSample, ...], started: float | None
         older_count = sum(s.rtt_samples for s in older)
         newer_count = sum(s.rtt_samples for s in newer)
         if older_count and newer_count:
-            info["rtt-trend-ms"] = 1000 * (
-                sum(s.rtt_total for s in newer) / newer_count - sum(s.rtt_total for s in older) / older_count
+            info["rtt-trend-ms"] = round(
+                1000 * (
+                    sum(s.rtt_total for s in newer) / newer_count - sum(s.rtt_total for s in older) / older_count
+                )
             )
     return info
 
@@ -152,6 +155,9 @@ class XpraRenoCongestionControl(RenoCongestionControl):
         info["recent"] = get_recent_info(samples, started, now, stats["bytes-in-flight"])
         if last_loss is not None:
             info["last-loss-age-ms"] = max(0, int((now - last_loss) * 1000))
+        # EWMA stays float internally; `xpra info` packets reject floats.
+        for key in ("rtt-latest-ms", "rtt-min-ms", "rtt-smoothed-ms"):
+            info[key] = round(info[key])
         return info
 
     def notify_send_waiters(self) -> None:
